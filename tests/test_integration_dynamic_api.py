@@ -56,18 +56,20 @@ def test_dynamic_api_endpoints_end_to_end():
     # Start API
     subprocess.run(["docker", "compose", "up", "-d", "api"], cwd=str(PROJECT_ROOT), check=True, env=env)
 
+    # Determine base URL for API (inside Docker use service DNS)
+    base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
     # Wait for health
-    wait_for("http://localhost:8000/health", timeout_seconds=45)
+    wait_for(f"{base_url}/health", timeout_seconds=45)
 
     # List tables
-    r = requests.get("http://localhost:8000/db/tables", timeout=5)
+    r = requests.get(f"{base_url}/db/tables", timeout=5)
     r.raise_for_status()
     tables = r.json()
     assert isinstance(tables, list) and len(tables) >= 1
     assert "sample_people" in tables
 
     # Columns
-    r = requests.get("http://localhost:8000/db/tables/sample_people/columns", timeout=5)
+    r = requests.get(f"{base_url}/db/tables/sample_people/columns", timeout=5)
     r.raise_for_status()
     cols = r.json()
     col_names = [c["name"] for c in cols]
@@ -75,7 +77,7 @@ def test_dynamic_api_endpoints_end_to_end():
         assert expected in col_names
 
     # Rows
-    r = requests.get("http://localhost:8000/db/tables/sample_people/rows?limit=2&offset=0", timeout=5)
+    r = requests.get(f"{base_url}/db/tables/sample_people/rows?limit=2&offset=0", timeout=5)
     r.raise_for_status()
     rows = r.json()
     assert isinstance(rows, list) and len(rows) >= 1

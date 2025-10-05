@@ -75,6 +75,21 @@ docker-compose up -d api
 PYTHONPATH=$(pwd) pytest -q -m integration
 ```
 
+Mac users: enable Docker Desktop file sharing
+
+If you want to run integration tests fully in containers (via the `tester` service) or invoke `docker compose` from inside a container, you must share your project path with Docker Desktop so the daemon can mount it.
+
+Steps (macOS):
+- Docker Desktop → Settings → Resources → File sharing
+- Add your project path (for example: `/Users/joereg4/dbase-to-api` or the parent folder `/Users/joereg4`)
+- Apply and restart Docker Desktop
+
+After enabling file sharing, you can run:
+
+```bash
+docker compose run --rm tester
+```
+
 What it does:
 - Generates a small `.dbf` locally
 - Brings up the `db` container

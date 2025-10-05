@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16-alpine
@@ -55,10 +53,11 @@ services:
     container_name: dbase_tester
     env_file: .env
     environment:
-      PYTHONPATH: /workspace
-    working_dir: /workspace
+      PYTHONPATH: /Users/joereg4/dbase-to-api
+      API_BASE_URL: http://api:8000
+    working_dir: /Users/joereg4/dbase-to-api
     volumes:
-      - ./:/workspace:rw
+      - /Users/joereg4/dbase-to-api:/Users/joereg4/dbase-to-api:rw
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       db:
