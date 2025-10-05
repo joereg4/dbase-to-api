@@ -84,7 +84,7 @@ def test_dynamic_api_endpoints_end_to_end():
     assert set(rows[0].keys()).issuperset({"id", "name", "active"})
 
     # 404 for a missing table
-    r = requests.get("http://localhost:8000/db/tables/does_not_exist/rows", timeout=5)
+    r = requests.get(f"{base_url}/db/tables/does_not_exist/rows", timeout=5)
     assert r.status_code == 404
 
     # Teardown API (keep db up for debug if needed)
