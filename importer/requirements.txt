@@ -1,0 +1,5 @@
+dbfread==2.0.7
+SQLAlchemy==2.0.35
+psycopg[binary]==3.2.2
+python-dotenv==1.0.1
+
