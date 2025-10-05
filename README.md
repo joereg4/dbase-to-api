@@ -81,3 +81,17 @@ What it does:
 - Runs the importer one-off
 - Asserts rows exist using `psql` inside the container
 
+## Exporting the database
+
+After importing `.dbf` files, you can export the PostgreSQL database:
+
+```bash
+# SQL dump (schema + data)
+make export-sql
+
+# Custom format (use pg_restore later)
+make export-custom
+```
+
+Outputs go to `exports/` (ignored by git).
+

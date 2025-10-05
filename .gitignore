@@ -20,4 +20,6 @@ venv/
 /.coverage
 htmlcov/
 .DS_Store
+exports/*.sql
+exports/*.dump
 

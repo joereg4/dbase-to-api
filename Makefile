@@ -1,4 +1,4 @@
-.PHONY: sample up-db import up-api test-unit test-integration down clean logs all test
+.PHONY: sample up-db import up-api test-unit test-integration down clean logs all test export-sql export-custom exports-dir
 
 .DEFAULT_GOAL := test
 
@@ -35,4 +35,15 @@ clean:
 all: test-unit test-integration
 
 test: test-unit test-integration
+
+exports-dir:
+	@mkdir -p exports
+
+export-sql: exports-dir
+	@docker exec -i dbase_pg pg_dump -U "$$(grep ^POSTGRES_USER .env | cut -d= -f2)" -d "$$(grep ^POSTGRES_DB .env | cut -d= -f2)" -h localhost -p 5432 --no-owner --no-privileges > exports/schema_data.sql || true
+	@echo "Wrote exports/schema_data.sql (if pg_dump is accessible via exec)"
+
+export-custom: exports-dir
+	@docker exec -i dbase_pg pg_dump -U "$$(grep ^POSTGRES_USER .env | cut -d= -f2)" -d "$$(grep ^POSTGRES_DB .env | cut -d= -f2)" -h localhost -p 5432 -Fc > exports/database.dump || true
+	@echo "Wrote exports/database.dump (custom format)"
 
