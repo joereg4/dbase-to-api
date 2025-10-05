@@ -40,9 +40,9 @@ services:
     build: ./scripts
     container_name: dbase_tools
     env_file: .env
-    working_dir: /workspace
+    working_dir: ${PWD}
     volumes:
-      - ./:/workspace:rw
+      - ${PWD}:${PWD}:rw
     # default command overridden per use via `docker compose run --rm tools ...`
     command: ["python", "--version"]
 
@@ -53,12 +53,11 @@ services:
     container_name: dbase_tester
     env_file: .env
     environment:
-      PYTHONPATH: /workspace
+      PYTHONPATH: ${PWD}
       API_BASE_URL: http://api:8000
-      HOST_WORKSPACE: ${GITHUB_WORKSPACE:-.}
-    working_dir: /workspace
+    working_dir: ${PWD}
     volumes:
-      - ./:/workspace:rw
+      - ${PWD}:${PWD}:rw
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       db:

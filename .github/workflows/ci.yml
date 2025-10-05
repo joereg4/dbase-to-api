@@ -33,6 +33,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: dbase
+          HOST_PWD: ${{ github.workspace }}
         run: |
           docker compose run --rm tools ls -la scripts
           docker compose run --rm tools python scripts/make_sample_dbf.py
