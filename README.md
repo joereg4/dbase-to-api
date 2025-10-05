@@ -1,5 +1,8 @@
 dbase-to-api (Docker + FastAPI + PostgreSQL)
 
+[![CI](https://github.com/joereg4/dbase-to-api/actions/workflows/ci.yml/badge.svg)](https://github.com/joereg4/dbase-to-api/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 Modernize dBASE/FoxPro `.dbf` files by importing to PostgreSQL and exposing a FastAPI REST API.
 
 Quick start
