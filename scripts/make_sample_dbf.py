@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from dbf import Table, Field
+from dbf import Table, READ_WRITE
 
 
 def ensure_data_dir() -> Path:
@@ -10,14 +10,10 @@ def ensure_data_dir() -> Path:
 
 
 def create_sample_dbf(path: Path) -> None:
-    # Very small sample: id (N,4), name (C,20), active (L)
-    table = Table(
-        str(path),
-        Field("id", "N", 4),
-        Field("name", "C", 20),
-        Field("active", "L"),
-    )
-    table.open(mode="create")
+    # Very small sample using field spec string
+    # id N(4), name C(20), active L
+    table = Table(str(path), "id N(4,0); name C(20); active L")
+    table.open(mode=READ_WRITE)
     try:
         table.append((1, "Alpha", True))
         table.append((2, "Beta", False))
