@@ -29,8 +29,8 @@ def test_importer_creates_table_and_rows(tmp_path: Path):
     else:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Generate a tiny sample DBF
-    subprocess.run([sys.executable, str(PROJECT_ROOT / "scripts" / "make_sample_dbf.py")], check=True)
+    # Generate a tiny sample DBF via tools container (self-contained)
+    subprocess.run(["docker", "compose", "run", "--rm", "tools", "python", "scripts/make_sample_dbf.py"], cwd=str(PROJECT_ROOT), check=True, env=env)
     assert any(DATA_DIR.glob("*.dbf")), "Expected a sample .dbf created in data/"
 
     # Bring up db and run importer as one-off

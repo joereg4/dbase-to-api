@@ -38,6 +38,16 @@ services:
         condition: service_healthy
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
+  tools:
+    build: ./scripts
+    container_name: dbase_tools
+    env_file: .env
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace:rw
+    # default command overridden per use via `docker compose run --rm tools ...`
+    command: ["python", "--version"]
+
 volumes:
   pgdata:
     driver: local

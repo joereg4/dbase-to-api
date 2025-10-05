@@ -51,3 +51,9 @@ def test_infer_table_from_dbf_lowercases_names_and_creates_columns():
     assert isinstance(table.c.name.type, String)
     assert isinstance(table.c.amt.type, Numeric)
 
+
+def test_map_dbase_type_string_default_length():
+    s = map_dbase_type(FakeField("X", "C", length=None))
+    # default should be a String with some positive length
+    assert isinstance(s, String)
+

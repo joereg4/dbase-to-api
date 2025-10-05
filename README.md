@@ -36,11 +36,10 @@ docker compose up --build
 
 ## Make a tiny local sample `.dbf`
 
-If you prefer not to download anything, you can generate a 3-row `.dbf` locally:
+If you prefer not to download anything, you can generate a 3-row `.dbf` using the containerized tools service:
 
 ```bash
-python3 -m pip install -r scripts/requirements.txt
-python3 scripts/make_sample_dbf.py
+docker compose run --rm tools python scripts/make_sample_dbf.py
 ```
 
 This writes `data/sample_people.dbf`. Then run the importer:
