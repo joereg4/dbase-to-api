@@ -37,6 +37,8 @@ def wait_for(url: str, timeout_seconds: int = 30) -> None:
 @pytest.mark.skipif(not docker_available(), reason="Docker not available")
 def test_dynamic_api_endpoints_end_to_end():
     env = os.environ.copy()
+    # Ensure compose inside container uses mounted /workspace compose file
+    env.pop("COMPOSE_FILE", None)
     env.setdefault("POSTGRES_USER", "postgres")
     env.setdefault("POSTGRES_PASSWORD", "postgres")
     env.setdefault("POSTGRES_DB", "dbase")

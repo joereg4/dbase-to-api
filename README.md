@@ -61,7 +61,18 @@ This includes importer unit tests for type mapping and table inference.
 Run integration tests (requires Docker):
 
 ```bash
-pytest -q -m integration
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements-dev.txt
+
+# Generate sample DBF and bring services up
+docker-compose run --rm tools python scripts/make_sample_dbf.py
+docker-compose up -d db
+docker-compose run --rm importer
+docker-compose up -d api
+
+# Run integration tests locally (host Python)
+PYTHONPATH=$(pwd) pytest -q -m integration
 ```
 
 What it does:

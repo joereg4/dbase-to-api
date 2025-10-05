@@ -48,6 +48,24 @@ services:
     # default command overridden per use via `docker compose run --rm tools ...`
     command: ["python", "--version"]
 
+  tester:
+    build:
+      context: .
+      dockerfile: ./tester/Dockerfile
+    container_name: dbase_tester
+    env_file: .env
+    environment:
+      PYTHONPATH: /workspace
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace:rw
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      db:
+        condition: service_started
+    # default command runs integration tests, can be overridden
+    command: ["pytest", "-q", "-m", "integration"]
+
 volumes:
   pgdata:
     driver: local
