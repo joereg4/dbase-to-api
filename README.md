@@ -4,8 +4,13 @@ Modernize dBASE/FoxPro `.dbf` files by importing to PostgreSQL and exposing a Fa
 
 Quick start
 1) Copy `.env.example` to `.env`.
-2) Put `.dbf` files into `./data/`.
-3) Run: `docker compose up --build`.
+2) One-command demo with public data: `make demo-public`
+   - Health: http://localhost:8000/health
+   - Docs:   http://localhost:8000/docs
+   - Tables: http://localhost:8000/db/tables
+3) Or bring your own `.dbf`: put files into `./data/` then run:
+   - `docker compose run --rm importer`
+   - `docker compose up -d api`
 
 Services
 - db: Postgres 16 (internal-only; connect via docker exec)
@@ -25,13 +30,13 @@ docker exec -it dbase_pg psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 This repo includes a helper script that downloads small public datasets (Natural Earth shapefiles) and extracts their `.dbf` attribute tables into `./data/`.
 
 ```bash
-python3 scripts/fetch_public_dbf.py
+docker compose run --rm tools python scripts/fetch_public_dbf.py
 ```
 
 After running, you should see `.dbf` files in `./data/`. Then start the stack:
 
 ```bash
-docker compose up --build
+docker compose up -d api
 ```
 
 ## Make a tiny local sample `.dbf`
@@ -45,35 +50,19 @@ docker compose run --rm tools python scripts/make_sample_dbf.py
 This writes `data/sample_people.dbf`. Then run the importer:
 
 ```bash
-docker compose up --build importer
+docker compose run --rm importer
 ```
 
 ## Testing
 
-Run unit tests (no services needed):
+Run all tests (unit + integration) in Docker:
 
 ```bash
-pytest -q
+make test
 ```
 
-This includes importer unit tests for type mapping and table inference.
-
-Run integration tests (requires Docker):
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements-dev.txt
-
-# Generate sample DBF and bring services up
-docker-compose run --rm tools python scripts/make_sample_dbf.py
-docker-compose up -d db
-docker-compose run --rm importer
-docker-compose up -d api
-
-# Run integration tests locally (host Python)
-PYTHONPATH=$(pwd) pytest -q -m integration
-```
+Notes:
+- Integration tests run in the `tester` container and call Docker from inside; ensure Docker Desktop file sharing is configured (see below).
 
 Mac users: enable Docker Desktop file sharing
 
@@ -90,11 +79,11 @@ After enabling file sharing, you can run:
 docker compose run --rm tester
 ```
 
-What it does:
-- Generates a small `.dbf` locally
-- Brings up the `db` container
-- Runs the importer one-off
-- Asserts rows exist using `psql` inside the container
+What integration tests do:
+- Generate a sample `.dbf`
+- Bring up `db` and start the API
+- Run the importer one-off
+- Exercise dynamic endpoints (tables/columns/rows)
 
 ## Exporting the database
 

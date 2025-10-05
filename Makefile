@@ -1,4 +1,4 @@
-.PHONY: sample up-db import up-api test-unit test-integration down clean logs all test export-sql export-custom exports-dir
+.PHONY: sample up-db import up-api test-unit test-integration down clean logs all test export-sql export-custom exports-dir demo-public
 
 .DEFAULT_GOAL := test
 
@@ -47,4 +47,13 @@ export-sql: exports-dir
 export-custom: exports-dir
 	@docker exec -i dbase_pg pg_dump -U "$$(grep ^POSTGRES_USER .env | cut -d= -f2)" -d "$$(grep ^POSTGRES_DB .env | cut -d= -f2)" -h localhost -p 5432 -Fc > exports/database.dump || true
 	@echo "Wrote exports/database.dump (custom format)"
+
+demo-public: up-db
+	@docker compose run --rm tools python scripts/fetch_public_dbf.py
+	@docker compose run --rm importer
+	@docker compose up -d api
+	@echo "\nDemo ready:"
+	@echo "- Health: http://localhost:8000/health"
+	@echo "- Docs:   http://localhost:8000/docs"
+	@echo "- Tables: http://localhost:8000/db/tables\n"
 
