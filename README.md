@@ -16,6 +16,10 @@ Services
 - db: Postgres 16 (internal-only; connect via docker exec)
 - importer: reads `.dbf` from `/data` and loads into Postgres
 - api: FastAPI at http://localhost:8000
+ 
+Contributing
+- See `CONTRIBUTING.md`. Code of conduct: `CODE_OF_CONDUCT.md`.
+ 
 
 Reset database
 - Remove the `pgdata` volume: `docker volume rm dbase-to-api_pgdata` (name may vary)
@@ -70,7 +74,7 @@ If you want to run integration tests fully in containers (via the `tester` servi
 
 Steps (macOS):
 - Docker Desktop → Settings → Resources → File sharing
-- Add your project path (for example: `/Users/joereg4/dbase-to-api` or the parent folder `/Users/joereg4`)
+- Add your project path (for example: `/Users/youruser/dbase-to-api` or the parent folder `/Users/youruser`)
 - Apply and restart Docker Desktop
 
 After enabling file sharing, you can run:

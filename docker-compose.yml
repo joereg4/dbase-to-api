@@ -53,11 +53,11 @@ services:
     container_name: dbase_tester
     env_file: .env
     environment:
-      PYTHONPATH: /Users/joereg4/dbase-to-api
+      PYTHONPATH: /workspace
       API_BASE_URL: http://api:8000
-    working_dir: /Users/joereg4/dbase-to-api
+    working_dir: /workspace
     volumes:
-      - /Users/joereg4/dbase-to-api:/Users/joereg4/dbase-to-api:rw
+      - ./:/workspace:rw
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       db:
