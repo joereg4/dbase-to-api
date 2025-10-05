@@ -55,6 +55,7 @@ services:
     environment:
       PYTHONPATH: /workspace
       API_BASE_URL: http://api:8000
+      HOST_WORKSPACE: ${GITHUB_WORKSPACE:-.}
     working_dir: /workspace
     volumes:
       - ./:/workspace:rw
