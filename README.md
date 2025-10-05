@@ -40,6 +40,16 @@ Requirements
 - macOS, Linux, or Windows with WSL2
 - Internet access for public demo data
 
+Security notes
+- Dependencies are pinned. We periodically bump FastAPI/Starlette to include upstream security fixes. Current FastAPI `0.117.0` pulls Starlette `0.48.x`, which addresses recent Starlette CVEs.
+- Base images are `python:3.12-slim` (Debian). Dockerfiles install the latest `openssl` and `ca-certificates` from Debian security repos during build.
+- To refresh security fixes force-rebuild images:
+
+```bash
+docker compose build --no-cache api importer
+make test
+```
+
 Architecture
 - Source `.dbf` files in `data/`
 - Importer reads each `.dbf` and creates a PostgreSQL table (one table per file)
