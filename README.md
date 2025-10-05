@@ -32,6 +32,43 @@ Formatting (Black)
   - Auto-format: `make format`
   - Check only:  `make format-check`
 
+Requirements
+- Docker Desktop (or Docker Engine) with Compose v2
+- macOS, Linux, or Windows with WSL2
+- Internet access for public demo data
+
+Architecture
+- Source `.dbf` files in `data/`
+- Importer reads each `.dbf` and creates a PostgreSQL table (one table per file)
+- FastAPI provides dynamic endpoints to list tables, columns, and rows
+
+Minimal API examples
+```bash
+curl http://localhost:8000/db/tables
+curl http://localhost:8000/db/tables/your_table/columns
+curl "http://localhost:8000/db/tables/your_table/rows?limit=10&offset=0"
+```
+
+Table naming and schema inference
+- Table names come from the `.dbf` basename (non-alphanumeric chars may be normalized)
+- Strings map to `TEXT`, numbers to `NUMERIC(precision, scale)` or `INTEGER` when safe
+- Dates map to `DATE`, datetimes to `TIMESTAMP` (if present)
+- Column names are lowercased; collisions are disambiguated
+
+Performance notes
+- Large imports: prefer running importer once, then start API
+- Index after import if you need fast filtering/sorting
+- Limit/offset are bounded to protect API; adjust in code if needed
+
+Troubleshooting
+- Port 8000 in use: stop the other service or change the published port
+- "mounts denied" on macOS: ensure your repo path is shared in Docker Desktop → Settings → Resources → File sharing
+- Public data fetch 406: use `make demo-public` (uses NACIS CDN) or add your own `.dbf` to `data/`
+- CI failures:
+  - Formatting: run `make format`
+  - Missing `.env`: kept in `.env.example` and copied in CI; ensure it's present
+  - Workspace mount: CI sets an absolute mount; open an issue if it regresses
+
 
 Reset database
 - Remove the `pgdata` volume: `docker volume rm dbase-to-api_pgdata` (name may vary)
@@ -100,6 +137,30 @@ What integration tests do:
 - Bring up `db` and start the API
 - Run the importer one-off
 - Exercise dynamic endpoints (tables/columns/rows)
+
+## Import your own `.dbf` files
+
+Bring any `.dbf` files you want to import and place them in the `data/` folder at the repo root (they will be mounted read-only into the importer container at `/data`). Then run:
+
+```bash
+# 1) Ensure Postgres is up
+docker compose up -d db
+
+# 2) Import every .dbf found in ./data
+docker compose run --rm importer
+
+# 3) Start the API
+docker compose up -d api
+
+# 4) Browse
+open http://localhost:8000/db/tables
+```
+
+Notes:
+- You can mix multiple `.dbf` files; each becomes a table in PostgreSQL with the `.dbf` basename as the table name.
+- If you add or change files in `data/`, re-run the importer step.
+- Exports are available after import via `make export-sql` or `make export-custom` (see Exporting section).
+ - Reset database: remove the `pgdata` volume to clear data, e.g. `docker volume rm dbase-to-api_pgdata` (name may vary).
 
 ## Exporting the database
 
