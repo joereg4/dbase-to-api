@@ -22,4 +22,6 @@ htmlcov/
 .DS_Store
 exports/*.sql
 exports/*.dump
+.cursor/
+.agent/
 
