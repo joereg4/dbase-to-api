@@ -17,7 +17,7 @@ up-api: up-db
 	@docker compose up -d api
 
 test-unit:
-	@docker compose run -e PYTHONPATH=/workspace --rm tools pytest -q -m "not integration"
+    @docker compose run -e PYTHONPATH=/workspace --rm tools pytest -q
 
 # Integration tests run on the host so they can call docker-compose inside tests
 test-integration: up-db sample import up-api
@@ -32,9 +32,10 @@ down:
 clean:
 	@docker compose down -v
 
-all: test-unit test-integration
+all: test
 
-test: test-unit test-integration
+test: up-db sample import up-api
+    @docker compose run --rm tester
 
 exports-dir:
 	@mkdir -p exports

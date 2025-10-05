@@ -62,8 +62,8 @@ services:
     depends_on:
       db:
         condition: service_started
-    # default command runs integration tests, can be overridden
-    command: ["pytest", "-q", "-m", "integration"]
+    # default command runs all tests
+    command: ["pytest", "-q"]
 
 volumes:
   pgdata:
