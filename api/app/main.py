@@ -12,4 +12,3 @@ def health() -> dict:
 
 
 app.include_router(dynamic.router, prefix="/db", tags=["dynamic"])
-

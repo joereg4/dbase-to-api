@@ -25,4 +25,3 @@ class Invoice(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     number: Mapped[str] = mapped_column(String(255))
-

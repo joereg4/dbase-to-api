@@ -64,7 +64,6 @@ def list_rows(
         raise HTTPException(status_code=404, detail="Table not found")
 
     # Build a safe statement: identifiers cannot be bound; we whitelist by checking existence above
-    stmt = text(f"SELECT * FROM public.\"{table}\" LIMIT :limit OFFSET :offset")
+    stmt = text(f'SELECT * FROM public."{table}" LIMIT :limit OFFSET :offset')
     rows = db.execute(stmt, {"limit": limit, "offset": offset}).mappings().all()
     return [dict(r) for r in rows]
-

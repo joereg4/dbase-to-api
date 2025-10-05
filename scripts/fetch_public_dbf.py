@@ -31,10 +31,10 @@ def download_and_extract_dbf(name: str, url: str, outdir: Path) -> None:
     r.raise_for_status()
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
         for member in z.namelist():
-            if member.lower().endswith('.dbf'):
+            if member.lower().endswith(".dbf"):
                 target = outdir / f"{name}.dbf"
                 print(f"Extracting {member} -> {target}")
-                with z.open(member) as src, open(target, 'wb') as dst:
+                with z.open(member) as src, open(target, "wb") as dst:
                     dst.write(src.read())
 
 
@@ -49,4 +49,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -20,6 +20,18 @@ Services
 Contributing
 - See `CONTRIBUTING.md`. Code of conduct: `CODE_OF_CONDUCT.md`.
  
+CI (GitHub Actions)
+- On each push/PR, CI builds images, checks code formatting with Black, and runs all tests in Docker.
+- Common failure reasons:
+  - Formatting: run `make format` locally to auto-fix; CI uses `black --check .`.
+  - Missing env file in forks: ensure `.env.example` stays updated; CI copies it to `.env`.
+  - Docker Desktop file sharing (macOS dev only): follow the "Mac users" section if running tests locally.
+ 
+Formatting (Black)
+- The project pins Black in `scripts/requirements.txt`. Always run Black via the tools container to match CI exactly:
+  - Auto-format: `make format`
+  - Check only:  `make format-check`
+
 
 Reset database
 - Remove the `pgdata` volume: `docker volume rm dbase-to-api_pgdata` (name may vary)

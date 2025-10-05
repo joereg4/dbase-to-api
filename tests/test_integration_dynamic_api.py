@@ -13,7 +13,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 def docker_available() -> bool:
     try:
-        subprocess.run(["docker", "version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run(
+            ["docker", "version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
+        )
         return True
     except Exception:
         return False
@@ -44,17 +46,28 @@ def test_dynamic_api_endpoints_end_to_end():
     env.setdefault("POSTGRES_DB", "dbase")
 
     # Ensure a sample DBF exists via tools container
-    subprocess.run(["docker", "compose", "run", "--rm", "tools", "python", "scripts/make_sample_dbf.py"], cwd=str(PROJECT_ROOT), check=True, env=env)
+    subprocess.run(
+        ["docker", "compose", "run", "--rm", "tools", "python", "scripts/make_sample_dbf.py"],
+        cwd=str(PROJECT_ROOT),
+        check=True,
+        env=env,
+    )
 
     # Start db
-    subprocess.run(["docker", "compose", "up", "-d", "db"], cwd=str(PROJECT_ROOT), check=True, env=env)
+    subprocess.run(
+        ["docker", "compose", "up", "-d", "db"], cwd=str(PROJECT_ROOT), check=True, env=env
+    )
     time.sleep(5)
 
     # Run importer one-off
-    subprocess.run(["docker", "compose", "run", "--rm", "importer"], cwd=str(PROJECT_ROOT), check=True, env=env)
+    subprocess.run(
+        ["docker", "compose", "run", "--rm", "importer"], cwd=str(PROJECT_ROOT), check=True, env=env
+    )
 
     # Start API
-    subprocess.run(["docker", "compose", "up", "-d", "api"], cwd=str(PROJECT_ROOT), check=True, env=env)
+    subprocess.run(
+        ["docker", "compose", "up", "-d", "api"], cwd=str(PROJECT_ROOT), check=True, env=env
+    )
 
     # Determine base URL for API (inside Docker use service DNS)
     base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -89,4 +102,3 @@ def test_dynamic_api_endpoints_end_to_end():
 
     # Teardown API (keep db up for debug if needed)
     subprocess.run(["docker", "compose", "down"], cwd=str(PROJECT_ROOT), check=True, env=env)
-

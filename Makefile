@@ -1,4 +1,4 @@
-.PHONY: sample up-db import up-api test-unit test-integration down clean logs all test export-sql export-custom exports-dir demo-public
+.PHONY: sample up-db import up-api test-unit test-integration down clean logs all test export-sql export-custom exports-dir demo-public format format-check
 
 .DEFAULT_GOAL := test
 
@@ -56,4 +56,10 @@ demo-public: up-db
 	@echo "- Health: http://localhost:8000/health"
 	@echo "- Docs:   http://localhost:8000/docs"
 	@echo "- Tables: http://localhost:8000/db/tables\n"
+
+format:
+	@docker compose run --rm tools black .
+
+format-check:
+	@docker compose run --rm tools black --check .
 

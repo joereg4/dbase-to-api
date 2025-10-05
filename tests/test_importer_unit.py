@@ -6,7 +6,9 @@ from importer.convert_dbase import map_dbase_type, infer_sqlalchemy_table_from_d
 
 
 class FakeField:
-    def __init__(self, name: str, ftype: str, length: int | None = None, decimal_count: int | None = None):
+    def __init__(
+        self, name: str, ftype: str, length: int | None = None, decimal_count: int | None = None
+    ):
         self.name = name
         self.type = ftype
         self.length = length
@@ -56,4 +58,3 @@ def test_map_dbase_type_string_default_length():
     s = map_dbase_type(FakeField("X", "C", length=None))
     # default should be a String with some positive length
     assert isinstance(s, String)
-

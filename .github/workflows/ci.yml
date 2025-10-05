@@ -1,38 +1,41 @@
 name: CI
 
 on:
-    pull_request:
-    push:
-        branches: [main]
+  pull_request:
+  push:
+    branches: [main]
 
 jobs:
-    test:
-        runs-on: ubuntu-latest
-        permissions:
-            contents: read
-            pull-requests: read
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Prepare env file
         run: cp .env.example .env
 
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-            - name: Build services
-              run: |
-                  docker compose build
+      - name: Build services
+        run: |
+          docker compose build
 
-            - name: Run tests (unit + integration)
-              env:
-                  POSTGRES_USER: postgres
-                  POSTGRES_PASSWORD: postgres
-                  POSTGRES_DB: dbase
-              run: |
-                  docker compose run --rm tools python scripts/make_sample_dbf.py
-                  docker compose up -d db
-                  docker compose run --rm importer
-                  docker compose up -d api
-                  docker compose run --rm tester
+      - name: Check code formatting (Black)
+        run: |
+          docker compose run --rm tools black --check .
+
+      - name: Run tests (unit + integration)
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dbase
+        run: |
+          docker compose run --rm tools python scripts/make_sample_dbf.py
+          docker compose up -d db
+          docker compose run --rm importer
+          docker compose up -d api
+          docker compose run --rm tester
