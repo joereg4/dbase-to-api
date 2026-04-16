@@ -30,7 +30,7 @@ def test_main_returns_zero_when_no_dbf_files(tmp_path, monkeypatch):
     assert convert_dbase.main() == 0
 
 
-def test_main_returns_nonzero_when_any_file_fails(tmp_path, monkeypatch, capsys):
+def test_main_returns_nonzero_when_any_file_fails(tmp_path, monkeypatch, caplog):
     good = tmp_path / "good.dbf"
     _write_sample_dbf(good)
     bad_path = str(tmp_path / "broken.dbf")
@@ -51,8 +51,10 @@ def test_main_returns_nonzero_when_any_file_fails(tmp_path, monkeypatch, capsys)
 
     monkeypatch.setattr(convert_dbase, "load_dbf_into_postgres", flaky_loader)
 
-    rc = convert_dbase.main()
+    with caplog.at_level("ERROR", logger="importer"):
+        rc = convert_dbase.main()
+
     assert rc == 1
-    err = capsys.readouterr().err
-    assert "broken.dbf" in err
-    assert "synthetic failure" in err
+    messages = "\n".join(r.getMessage() for r in caplog.records)
+    assert "broken.dbf" in messages
+    assert "synthetic failure" in caplog.text  # includes formatted exception

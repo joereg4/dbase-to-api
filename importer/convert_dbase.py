@@ -1,12 +1,15 @@
+import logging
 import os
 import glob
 import sys
-import traceback
 from typing import Dict, Any, List
 
 from dbfread import DBF
 from sqlalchemy import create_engine, Table, Column, MetaData, text, types as satypes
 from sqlalchemy.engine import Engine
+
+
+log = logging.getLogger("importer")
 
 
 def get_database_url() -> str:
@@ -77,31 +80,32 @@ def load_dbf_into_postgres(engine: Engine, dbf_path: str) -> None:
 
 
 def main() -> int:
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+
     engine = create_engine(get_database_url(), pool_pre_ping=True)
     dbf_paths = glob.glob("/data/*.dbf")
 
     if not dbf_paths:
-        print("No .dbf files found in /data – importer will exit.")
+        log.info("No .dbf files found in /data – importer will exit.")
         return 0
 
     failures: List[str] = []
     for path in dbf_paths:
-        print(f"Importing {path} ...")
+        log.info("Importing %s", path)
         try:
             load_dbf_into_postgres(engine, path)
-            print(f"Done: {path}")
-        except Exception as exc:
+            log.info("Done: %s", path)
+        except Exception:
             # Keep going with other files, but record the failure so the
             # process exits non-zero and the traceback is visible for triage.
             failures.append(path)
-            print(f"Failed to import {path}: {exc}", file=sys.stderr)
-            traceback.print_exc()
+            log.exception("Failed to import %s", path)
 
     if failures:
-        print(
-            f"Importer finished with {len(failures)} failure(s): {failures}",
-            file=sys.stderr,
-        )
+        log.error("Importer finished with %d failure(s): %s", len(failures), failures)
         return 1
     return 0
 
