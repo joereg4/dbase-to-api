@@ -63,7 +63,10 @@ def list_rows(
     if not db.execute(exists_sql, {"t": table}).first():
         raise HTTPException(status_code=404, detail="Table not found")
 
-    # Build a safe statement: identifiers cannot be bound; we whitelist by checking existence above
-    stmt = text(f'SELECT * FROM public."{table}" LIMIT :limit OFFSET :offset')
+    # Identifiers cannot be bound as parameters. The dialect preparer escapes
+    # embedded double-quotes so a hostile name cannot break out of the literal.
+    preparer = db.bind.dialect.identifier_preparer
+    qualified = f"{preparer.quote('public')}.{preparer.quote(table)}"
+    stmt = text(f"SELECT * FROM {qualified} LIMIT :limit OFFSET :offset")
     rows = db.execute(stmt, {"limit": limit, "offset": offset}).mappings().all()
     return [dict(r) for r in rows]
