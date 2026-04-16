@@ -3,7 +3,7 @@ import glob
 from typing import Dict, Any, List
 
 from dbfread import DBF
-from sqlalchemy import create_engine, Table, Column, MetaData, types as satypes
+from sqlalchemy import create_engine, Table, Column, MetaData, text, types as satypes
 from sqlalchemy.engine import Engine
 
 
@@ -53,11 +53,19 @@ def load_dbf_into_postgres(engine: Engine, dbf_path: str) -> None:
 
     metadata = MetaData()
     table = infer_sqlalchemy_table_from_dbf(dbf, metadata, table_name)
-    metadata.create_all(engine, tables=[table])
 
     rows = [dict(r) for r in dbf]
     # Normalize keys to lowercase to match created columns
     rows = [{(k.lower() if isinstance(k, str) else k): v for k, v in r.items()} for r in rows]
+
+    # Full-refresh semantics: each run re-creates the table from the .dbf so
+    # repeated imports are idempotent and schema changes in the source file
+    # are picked up.
+    preparer = engine.dialect.identifier_preparer
+    qualified = preparer.quote(table_name)
+    with engine.begin() as conn:
+        conn.execute(text(f"DROP TABLE IF EXISTS {qualified}"))
+    metadata.create_all(engine, tables=[table])
 
     if not rows:
         return
