@@ -1,5 +1,7 @@
 import os
 import glob
+import sys
+import traceback
 from typing import Dict, Any, List
 
 from dbfread import DBF
@@ -74,23 +76,35 @@ def load_dbf_into_postgres(engine: Engine, dbf_path: str) -> None:
         conn.execute(table.insert(), rows)
 
 
-def main() -> None:
+def main() -> int:
     engine = create_engine(get_database_url(), pool_pre_ping=True)
     dbf_paths = glob.glob("/data/*.dbf")
 
     if not dbf_paths:
         print("No .dbf files found in /data – importer will exit.")
-        return
+        return 0
 
+    failures: List[str] = []
     for path in dbf_paths:
         print(f"Importing {path} ...")
         try:
             load_dbf_into_postgres(engine, path)
             print(f"Done: {path}")
         except Exception as exc:
-            # Keep going with other files
-            print(f"Failed to import {path}: {exc}")
+            # Keep going with other files, but record the failure so the
+            # process exits non-zero and the traceback is visible for triage.
+            failures.append(path)
+            print(f"Failed to import {path}: {exc}", file=sys.stderr)
+            traceback.print_exc()
+
+    if failures:
+        print(
+            f"Importer finished with {len(failures)} failure(s): {failures}",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
