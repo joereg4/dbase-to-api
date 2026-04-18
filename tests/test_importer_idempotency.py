@@ -1,5 +1,6 @@
 """Verify that load_dbf_into_postgres drops+recreates the table so repeated
 runs leave the database in the same state (no row duplication)."""
+
 from pathlib import Path
 
 import pytest

@@ -1,4 +1,5 @@
 """Verify importer main() exit codes and error handling."""
+
 from pathlib import Path
 
 import pytest
