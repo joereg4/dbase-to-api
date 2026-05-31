@@ -41,7 +41,7 @@ Requirements
 - Internet access for public demo data
 
 Security notes
-- Dependencies are pinned. We periodically bump FastAPI/Starlette to include upstream security fixes. Current FastAPI `0.117.0` pulls Starlette `0.48.x`, which addresses recent Starlette CVEs.
+- Dependencies are pinned. We periodically bump FastAPI/Starlette to include upstream security fixes. Current pins use FastAPI `0.130.0` with Starlette `>=1.0.1`.
 - Base images are `python:3.12-slim` (Debian). Dockerfiles install the latest `openssl` and `ca-certificates` from Debian security repos during build.
 - To refresh security fixes force-rebuild images:
 
