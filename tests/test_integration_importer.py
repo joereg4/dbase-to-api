@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import PROJECT_ROOT, compose_test_env
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 DATA_DIR = PROJECT_ROOT / "data"
 
 
@@ -42,12 +43,8 @@ def test_importer_creates_table_and_rows(tmp_path: Path):
     )
     assert any(DATA_DIR.glob("*.dbf")), "Expected a sample .dbf created in data/"
 
-    # Bring up db and run importer as one-off
-    env = os.environ.copy()
-    # Ensure .env defaults if not present; importer uses DATABASE_URL pointing to service 'db'
-    env.setdefault("POSTGRES_USER", "postgres")
-    env.setdefault("POSTGRES_PASSWORD", "postgres")
-    env.setdefault("POSTGRES_DB", "dbase")
+    # Bring up db and run importer as one-off (credentials from .env.example, not literals here)
+    env = compose_test_env()
 
     # Start db
     subprocess.run(

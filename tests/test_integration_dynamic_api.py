@@ -7,8 +7,7 @@ from pathlib import Path
 import pytest
 import requests
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from tests.conftest import PROJECT_ROOT, compose_test_env
 
 
 def docker_available() -> bool:
@@ -38,12 +37,7 @@ def wait_for(url: str, timeout_seconds: int = 30) -> None:
 @pytest.mark.integration
 @pytest.mark.skipif(not docker_available(), reason="Docker not available")
 def test_dynamic_api_endpoints_end_to_end():
-    env = os.environ.copy()
-    # Ensure compose inside container uses mounted /workspace compose file
-    env.pop("COMPOSE_FILE", None)
-    env.setdefault("POSTGRES_USER", "postgres")
-    env.setdefault("POSTGRES_PASSWORD", "postgres")
-    env.setdefault("POSTGRES_DB", "dbase")
+    env = compose_test_env()
 
     # Ensure a sample DBF exists via tools container
     subprocess.run(
