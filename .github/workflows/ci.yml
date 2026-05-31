@@ -24,6 +24,14 @@ jobs:
         run: |
           docker compose build
 
+      - name: pip-audit (api)
+        run: |
+          docker compose run --rm --no-deps api sh -c "pip install pip-audit && pip-audit -r requirements.txt"
+
+      - name: pip-audit (importer)
+        run: |
+          docker compose run --rm --no-deps importer sh -c "pip install pip-audit && pip-audit -r requirements.txt"
+
       - name: Check code formatting (Black)
         run: |
           docker compose run --rm tools black --check .

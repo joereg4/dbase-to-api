@@ -17,7 +17,7 @@ up-api: up-db
 	@docker compose up -d api
 
 test-unit:
-	@docker compose run -e PYTHONPATH=/workspace --rm tools pytest -q
+	@docker compose run -e PYTHONPATH=$$(pwd) --rm tools pytest -q
 
 # Integration tests run on the host so they can call docker-compose inside tests
 test-integration: up-db sample import up-api
@@ -41,12 +41,14 @@ exports-dir:
 	@mkdir -p exports
 
 export-sql: exports-dir
-	@docker exec -i dbase_pg pg_dump -U "$$(grep ^POSTGRES_USER .env | cut -d= -f2)" -d "$$(grep ^POSTGRES_DB .env | cut -d= -f2)" -h localhost -p 5432 --no-owner --no-privileges > exports/schema_data.sql || true
-	@echo "Wrote exports/schema_data.sql (if pg_dump is accessible via exec)"
+	@docker exec dbase_pg pg_isready -U "$$(grep ^POSTGRES_USER .env | cut -d= -f2)" >/dev/null
+	@docker exec -i dbase_pg pg_dump -U "$$(grep ^POSTGRES_USER .env | cut -d= -f2)" -d "$$(grep ^POSTGRES_DB .env | cut -d= -f2)" -h localhost -p 5432 --no-owner --no-privileges > exports/schema_data.sql
+	@echo "Wrote exports/schema_data.sql"
 
 export-custom: exports-dir
-	@docker exec -i dbase_pg pg_dump -U "$$(grep ^POSTGRES_USER .env | cut -d= -f2)" -d "$$(grep ^POSTGRES_DB .env | cut -d= -f2)" -h localhost -p 5432 -Fc > exports/database.dump || true
-	@echo "Wrote exports/database.dump (custom format)"
+	@docker exec dbase_pg pg_isready -U "$$(grep ^POSTGRES_USER .env | cut -d= -f2)" >/dev/null
+	@docker exec -i dbase_pg pg_dump -U "$$(grep ^POSTGRES_USER .env | cut -d= -f2)" -d "$$(grep ^POSTGRES_DB .env | cut -d= -f2)" -h localhost -p 5432 -Fc > exports/database.dump
+	@echo "Wrote exports/database.dump"
 
 demo-public: up-db
 	@docker compose run --rm tools python scripts/fetch_public_dbf.py

@@ -8,8 +8,14 @@ from dbfread import DBF
 from sqlalchemy import create_engine, Table, Column, MetaData, text, types as satypes
 from sqlalchemy.engine import Engine
 
+from importer.naming import sanitize_table_name
+
 
 log = logging.getLogger("importer")
+
+
+def get_dbf_encoding() -> str:
+    return os.getenv("DBF_ENCODING", "latin-1")
 
 
 def get_database_url() -> str:
@@ -41,27 +47,53 @@ def map_dbase_type(field) -> satypes.TypeEngine:
     return satypes.String(length)
 
 
+def deduplicate_column_name(name: str, seen: set[str]) -> str:
+    candidate = name
+    suffix = 2
+    while candidate in seen:
+        candidate = f"{name}_{suffix}"
+        suffix += 1
+    seen.add(candidate)
+    return candidate
+
+
 def infer_sqlalchemy_table_from_dbf(dbf: DBF, metadata: MetaData, table_name: str) -> Table:
     columns: List[Column] = []
+    seen_names: set[str] = set()
     for f in dbf.fields:
         if f.name == "":
             continue
         coltype = map_dbase_type(f)
-        colname = f.name.lower()
+        colname = deduplicate_column_name(f.name.lower(), seen_names)
         columns.append(Column(colname, coltype))
     return Table(table_name, metadata, *columns)
 
 
+def normalize_dbf_rows(rows: List[Dict[str, Any]], dbf: DBF) -> List[Dict[str, Any]]:
+    seen_names: set[str] = set()
+    name_map = {
+        f.name: deduplicate_column_name(f.name.lower(), seen_names)
+        for f in dbf.fields
+        if f.name != ""
+    }
+    normalized: List[Dict[str, Any]] = []
+    for row in rows:
+        normalized.append(
+            {name_map.get(k, k.lower() if isinstance(k, str) else k): v for k, v in row.items()}
+        )
+    return normalized
+
+
 def load_dbf_into_postgres(engine: Engine, dbf_path: str) -> None:
-    table_name = os.path.splitext(os.path.basename(dbf_path))[0].lower()
-    dbf = DBF(dbf_path, encoding="latin-1", ignore_missing_memofile=True)
+    basename = os.path.splitext(os.path.basename(dbf_path))[0]
+    table_name = sanitize_table_name(basename)
+    dbf = DBF(dbf_path, encoding=get_dbf_encoding(), ignore_missing_memofile=True)
 
     metadata = MetaData()
     table = infer_sqlalchemy_table_from_dbf(dbf, metadata, table_name)
 
     rows = [dict(r) for r in dbf]
-    # Normalize keys to lowercase to match created columns
-    rows = [{(k.lower() if isinstance(k, str) else k): v for k, v in r.items()} for r in rows]
+    rows = normalize_dbf_rows(rows, dbf)
 
     # Full-refresh semantics: each run re-creates the table from the .dbf so
     # repeated imports are idempotent and schema changes in the source file
@@ -86,14 +118,27 @@ def main() -> int:
     )
 
     engine = create_engine(get_database_url(), pool_pre_ping=True)
-    dbf_paths = glob.glob("/data/*.dbf")
+    dbf_paths = sorted(glob.glob("/data/**/*.dbf", recursive=True))
 
     if not dbf_paths:
         log.info("No .dbf files found in /data – importer will exit.")
         return 0
 
     failures: List[str] = []
+    table_sources: Dict[str, str] = {}
     for path in dbf_paths:
+        basename = os.path.splitext(os.path.basename(path))[0]
+        table_name = sanitize_table_name(basename)
+        if table_name in table_sources:
+            log.error(
+                "Table name collision: %s and %s both map to %r",
+                table_sources[table_name],
+                path,
+                table_name,
+            )
+            failures.append(path)
+            continue
+        table_sources[table_name] = path
         log.info("Importing %s", path)
         try:
             load_dbf_into_postgres(engine, path)

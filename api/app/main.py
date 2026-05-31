@@ -3,7 +3,9 @@ import os
 import time
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
+from . import db
 from .routes import dynamic
 
 
@@ -43,8 +45,13 @@ async def log_requests(request: Request, call_next):
 
 
 @app.get("/health")
-def health() -> dict:
-    return {"status": "ok"}
+def health():
+    if db.check_database():
+        return {"status": "ok", "database": "ok"}
+    return JSONResponse(
+        status_code=503,
+        content={"status": "degraded", "database": "unavailable"},
+    )
 
 
 app.include_router(dynamic.router, prefix="/db", tags=["dynamic"])

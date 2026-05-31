@@ -38,14 +38,19 @@ def download_and_extract_dbf(name: str, url: str, outdir: Path) -> None:
                     dst.write(src.read())
 
 
-def main() -> None:
+def main() -> int:
     outdir = ensure_data_dir()
+    failures = 0
     for name, url in NATURAL_EARTH_URLS:
         try:
             download_and_extract_dbf(name, url, outdir)
         except Exception as exc:
+            failures += 1
             print(f"Failed to fetch {name}: {exc}")
+    if failures == len(NATURAL_EARTH_URLS):
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
