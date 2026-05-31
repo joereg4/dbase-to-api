@@ -39,10 +39,22 @@ Thanks for your interest in contributing!
 
 ## Running tests
 
+- Unit tests only (no live stack required):
+  ```bash
+  make test-unit
+  ```
 - All tests (unit + integration) run in Docker via the `tester` service:
   ```bash
   make test
   ```
+- Integration tests only:
+  ```bash
+  make test-integration
+  ```
+
+**Caveats:**
+- The `tester` service mounts `/var/run/docker.sock` so integration tests can run nested compose commands. Do not use this on untrusted hosts.
+- `make test-integration` may run `docker compose down` and remove `data/*.dbf` during teardown. Stop local stacks first or use a clean clone if you need to preserve running services or sample data.
 
 ## Exporting data
 

@@ -15,7 +15,7 @@ COPY requirements.txt ./
 RUN python -m pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-COPY convert_dbase.py ./
+COPY convert_dbase.py naming.py ./
 
 CMD ["python", "convert_dbase.py"]
 

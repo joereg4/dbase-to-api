@@ -41,7 +41,7 @@ Requirements
 - Internet access for public demo data
 
 Security notes
-- Dependencies are pinned. We periodically bump FastAPI/Starlette to include upstream security fixes. Current FastAPI `0.117.0` pulls Starlette `0.48.x`, which addresses recent Starlette CVEs.
+- Dependencies are pinned. We periodically bump FastAPI/Starlette to include upstream security fixes. Current pins use FastAPI `0.130.0` with Starlette `>=1.0.1`.
 - Base images are `python:3.12-slim` (Debian). Dockerfiles install the latest `openssl` and `ca-certificates` from Debian security repos during build.
 - To refresh security fixes force-rebuild images:
 
@@ -55,6 +55,15 @@ Architecture
 - Importer reads each `.dbf` and creates a PostgreSQL table (one table per file)
 - FastAPI provides dynamic endpoints to list tables, columns, and rows
 
+## Development vs production
+
+This project is optimized for **local migration and demos**:
+- No API authentication or rate limiting
+- Default Postgres credentials via `.env`
+- Dynamic SQL routes are read-only but expose all imported tables
+
+Do not expose the API to the public internet without a reverse proxy, auth, and a read-only database role.
+
 Minimal API examples
 ```bash
 curl http://localhost:8000/db/tables
@@ -63,10 +72,12 @@ curl "http://localhost:8000/db/tables/your_table/rows?limit=10&offset=0"
 ```
 
 Table naming and schema inference
-- Table names come from the `.dbf` basename (non-alphanumeric chars may be normalized)
+- Table names are derived from the `.dbf` basename: lowercased, non-alphanumeric characters replaced with `_`, leading digits prefixed with `t_`, truncated to 63 characters (e.g. `Foo-Bar.DBF` → `foo_bar`, `123data.dbf` → `t_123data`)
+- Two different basenames that sanitize to the same table name cause an import error (rename one file before import)
 - Strings map to `TEXT`, numbers to `NUMERIC(precision, scale)` or `INTEGER` when safe
 - Dates map to `DATE`, datetimes to `TIMESTAMP` (if present)
-- Column names are lowercased; collisions are disambiguated
+- Column names are lowercased; duplicate column names after lowercasing are disambiguated with numeric suffixes (`name`, `name_2`, …)
+- Default `.dbf` encoding is `latin-1` (override with `DBF_ENCODING` in `.env`)
 
 Performance notes
 - Large imports: prefer running importer once, then start API
@@ -188,4 +199,23 @@ make export-custom
 ```
 
 Outputs go to `exports/` (ignored by git).
+
+## Building images
+
+From the repository root (there is no `src/puppeteer/` Dockerfile in this repo):
+
+```bash
+docker compose build          # all services
+docker compose build api      # API only
+docker compose build importer # importer only
+```
+
+The `db` service pins `postgres:16-alpine` by digest for reproducible builds. To refresh the pin:
+
+```bash
+docker pull postgres:16-alpine
+docker inspect --format='{{index .RepoDigests 0}}' postgres:16-alpine
+```
+
+Update the `image:` line in `docker-compose.yml` with the new digest.
 
