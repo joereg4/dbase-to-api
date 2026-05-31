@@ -8,7 +8,10 @@ from dbfread import DBF
 from sqlalchemy import create_engine, Table, Column, MetaData, text, types as satypes
 from sqlalchemy.engine import Engine
 
-from importer.naming import sanitize_table_name
+try:
+    from .naming import sanitize_table_name
+except ImportError:
+    from naming import sanitize_table_name
 
 
 log = logging.getLogger("importer")
