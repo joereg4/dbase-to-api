@@ -1,4 +1,4 @@
 dbfread==2.0.7
-SQLAlchemy==2.0.35
+SQLAlchemy==2.0.52
 psycopg[binary]==3.2.2
 
