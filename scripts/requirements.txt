@@ -1,5 +1,5 @@
 dbf==0.99.9
-pytest==8.3.3
+pytest==9.1.1
 requests==2.32.3
 fastapi==0.117.0
 SQLAlchemy==2.0.35
