@@ -1,6 +1,6 @@
 fastapi==0.136.3
 starlette>=1.0.1,<2
-uvicorn[standard]==0.30.6
+uvicorn[standard]==0.52.1
 SQLAlchemy==2.0.35
 psycopg[binary]==3.2.2
 pydantic==2.9.2
