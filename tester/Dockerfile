@@ -1,4 +1,4 @@
-FROM python:3.12-alpine
+FROM python:3.14-alpine
 
 # Install Docker CLI and Compose plugin
 RUN apk add --no-cache docker-cli docker-cli-compose
