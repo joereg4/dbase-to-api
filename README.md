@@ -69,7 +69,15 @@ Minimal API examples
 curl http://localhost:8000/db/tables
 curl http://localhost:8000/db/tables/your_table/columns
 curl "http://localhost:8000/db/tables/your_table/rows?limit=10&offset=0"
+curl "http://localhost:8000/db/tables/your_table/rows?name=Alpha&sort=-name"
+curl http://localhost:8000/db/tables/your_table/rows/1
 ```
+
+Row listing contract
+- `GET /db/tables/{table}/rows` → `{items, limit, offset, count}`
+- Equality filters: real column names as query params (unknown → 400)
+- Sort: `?sort=col` or `?sort=-col` (default: `dbf_recno`)
+- `GET /db/tables/{table}/rows/{dbf_recno}` → one row (404 if missing)
 
 Table naming and schema inference
 - Table names are derived from the `.dbf` basename: lowercased, non-alphanumeric characters replaced with `_`, leading digits prefixed with `t_`, truncated to 63 characters (e.g. `Foo-Bar.DBF` → `foo_bar`, `123data.dbf` → `t_123data`)

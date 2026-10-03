@@ -1,8 +1,6 @@
 import os
 import subprocess
-import sys
 import time
-from pathlib import Path
 
 import pytest
 import requests
@@ -34,65 +32,57 @@ def wait_for(url: str, timeout_seconds: int = 30) -> None:
     raise AssertionError(f"Service at {url} did not become ready: {last_err}")
 
 
+def _compose(*args: str, env: dict) -> None:
+    subprocess.run(["docker", "compose", *args], cwd=str(PROJECT_ROOT), check=True, env=env)
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(not docker_available(), reason="Docker not available")
 def test_dynamic_api_endpoints_end_to_end():
     env = compose_test_env()
 
-    # Ensure a sample DBF exists via tools container
-    subprocess.run(
-        ["docker", "compose", "run", "--rm", "tools", "python", "scripts/make_sample_dbf.py"],
-        cwd=str(PROJECT_ROOT),
-        check=True,
-        env=env,
-    )
-
-    # Start db
-    subprocess.run(
-        ["docker", "compose", "up", "-d", "db"], cwd=str(PROJECT_ROOT), check=True, env=env
-    )
+    _compose("run", "--rm", "tools", "python", "scripts/make_sample_dbf.py", env=env)
+    _compose("up", "-d", "db", env=env)
     time.sleep(5)
+    _compose("run", "--rm", "importer", env=env)
+    _compose("up", "-d", "api", env=env)
 
-    # Run importer one-off
-    subprocess.run(
-        ["docker", "compose", "run", "--rm", "importer"], cwd=str(PROJECT_ROOT), check=True, env=env
-    )
-
-    # Start API
-    subprocess.run(
-        ["docker", "compose", "up", "-d", "api"], cwd=str(PROJECT_ROOT), check=True, env=env
-    )
-
-    # Determine base URL for API (inside Docker use service DNS)
     base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
-    # Wait for health
     wait_for(f"{base_url}/health", timeout_seconds=45)
 
-    # List tables
     r = requests.get(f"{base_url}/db/tables", timeout=5)
     r.raise_for_status()
     tables = r.json()
-    assert isinstance(tables, list) and len(tables) >= 1
-    assert "sample_people" in tables
+    assert isinstance(tables, list) and "sample_people" in tables
 
-    # Columns
     r = requests.get(f"{base_url}/db/tables/sample_people/columns", timeout=5)
     r.raise_for_status()
-    cols = r.json()
-    col_names = [c["name"] for c in cols]
-    for expected in ["id", "name", "active"]:
-        assert expected in col_names
+    col_names = {c["name"] for c in r.json()}
+    assert {"id", "name", "active"} <= col_names
 
-    # Rows
     r = requests.get(f"{base_url}/db/tables/sample_people/rows?limit=2&offset=0", timeout=5)
     r.raise_for_status()
-    rows = r.json()
-    assert isinstance(rows, list) and len(rows) >= 1
-    assert set(rows[0].keys()).issuperset({"id", "name", "active"})
+    payload = r.json()
+    assert {"items", "limit", "offset", "count"} <= set(payload)
+    assert payload["limit"] == 2 and payload["offset"] == 0
+    assert payload["count"] >= 1 and len(payload["items"]) >= 1
+    assert {"id", "name", "active", "dbf_recno"} <= set(payload["items"][0])
 
-    # 404 for a missing table
-    r = requests.get(f"{base_url}/db/tables/does_not_exist/rows", timeout=5)
-    assert r.status_code == 404
+    r = requests.get(f"{base_url}/db/tables/sample_people/rows?name=Alpha", timeout=5)
+    r.raise_for_status()
+    filtered = r.json()
+    assert filtered["count"] == 1
+    assert filtered["items"][0]["name"] == "Alpha"
+    recno = filtered["items"][0]["dbf_recno"]
 
-    # Teardown API (keep db up for debug if needed)
-    subprocess.run(["docker", "compose", "down"], cwd=str(PROJECT_ROOT), check=True, env=env)
+    r = requests.get(f"{base_url}/db/tables/sample_people/rows/{recno}", timeout=5)
+    r.raise_for_status()
+    assert r.json()["name"] == "Alpha"
+
+    assert requests.get(f"{base_url}/db/tables/does_not_exist/rows", timeout=5).status_code == 404
+    assert (
+        requests.get(f"{base_url}/db/tables/sample_people/rows/999999", timeout=5).status_code
+        == 404
+    )
+
+    _compose("down", env=env)

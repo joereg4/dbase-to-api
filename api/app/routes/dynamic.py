@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, text
 
@@ -8,6 +10,7 @@ from ..deps import get_db
 router = APIRouter()
 
 DBF_RECNO = "dbf_recno"
+_RESERVED_ROW_PARAMS = frozenset({"limit", "offset", "sort"})
 
 
 def _table_column_names(db: Session, table: str) -> list[str] | None:
@@ -20,6 +23,19 @@ def _table_column_names(db: Session, table: str) -> list[str] | None:
     return [c["name"] for c in insp.get_columns(table, schema=schema)]
 
 
+def _require_table_columns(db: Session, table: str) -> list[str]:
+    column_names = _table_column_names(db, table)
+    if column_names is None:
+        raise HTTPException(status_code=404, detail="Table not found")
+    return column_names
+
+
+def _qualified_table(bind, preparer, table: str) -> str:
+    if bind.dialect.name == "postgresql":
+        return f"{preparer.quote('public')}.{preparer.quote(table)}"
+    return preparer.quote(table)
+
+
 def stable_order_sql(column_names: list[str], preparer) -> str:
     """Prefer dbf_recno; otherwise order by every column for stable paging."""
     if DBF_RECNO in column_names:
@@ -27,6 +43,48 @@ def stable_order_sql(column_names: list[str], preparer) -> str:
     if not column_names:
         return "1"
     return ", ".join(preparer.quote(c) for c in column_names)
+
+
+def order_by_sql(column_names: list[str], preparer, sort: str | None) -> str:
+    """Whitelist sort column; default to stable_order_sql. Tie-break with dbf_recno."""
+    if not sort:
+        return stable_order_sql(column_names, preparer)
+
+    descending = sort.startswith("-")
+    col = sort[1:] if descending else sort
+    if col not in column_names:
+        raise HTTPException(status_code=400, detail=f"Unknown sort column: {col}")
+
+    direction = "DESC" if descending else "ASC"
+    clause = f"{preparer.quote(col)} {direction}"
+    if DBF_RECNO in column_names and col != DBF_RECNO:
+        clause += f", {preparer.quote(DBF_RECNO)} ASC"
+    return clause
+
+
+def parse_equality_filters(
+    query_params, column_names: list[str], reserved: frozenset[str] = _RESERVED_ROW_PARAMS
+) -> dict[str, str]:
+    """Keep only equality filters whose keys are real column names."""
+    filters: dict[str, str] = {}
+    for key, value in query_params.items():
+        if key in reserved:
+            continue
+        if key not in column_names:
+            raise HTTPException(status_code=400, detail=f"Unknown filter column: {key}")
+        filters[key] = value
+    return filters
+
+
+def _where_clause(filters: dict[str, str], preparer) -> tuple[str, dict[str, str]]:
+    if not filters:
+        return "", {}
+    parts: list[str] = []
+    params: dict[str, str] = {}
+    for i, (col, value) in enumerate(filters.items()):
+        params[f"f{i}"] = value
+        parts.append(f"{preparer.quote(col)} = :f{i}")
+    return " WHERE " + " AND ".join(parts), params
 
 
 @router.get("/tables")
@@ -67,26 +125,62 @@ def list_columns(table: str, db: Session = Depends(get_db)) -> list[dict]:
     return [dict(r) for r in db.execute(sql, {"t": table}).mappings().all()]
 
 
+@router.get("/tables/{table}/rows/{dbf_recno}")
+def get_row(table: str, dbf_recno: int, db: Session = Depends(get_db)) -> dict:
+    column_names = _require_table_columns(db, table)
+    if DBF_RECNO not in column_names:
+        raise HTTPException(
+            status_code=404,
+            detail="Table has no dbf_recno column; re-import to enable row lookup",
+        )
+
+    bind = db.get_bind()
+    preparer = bind.dialect.identifier_preparer
+    qualified = _qualified_table(bind, preparer, table)
+    stmt = text(f"SELECT * FROM {qualified} WHERE {preparer.quote(DBF_RECNO)} = :recno LIMIT 1")
+    row = db.execute(stmt, {"recno": dbf_recno}).mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Row not found")
+    return dict(row)
+
+
 @router.get("/tables/{table}/rows")
 def list_rows(
     table: str,
+    request: Request,
     db: Session = Depends(get_db),
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-) -> list[dict]:
-    column_names = _table_column_names(db, table)
-    if column_names is None:
-        raise HTTPException(status_code=404, detail="Table not found")
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    sort: Annotated[str | None, Query()] = None,
+) -> dict:
+    column_names = _require_table_columns(db, table)
 
     # Identifiers cannot be bound as parameters. The dialect preparer escapes
     # embedded double-quotes so a hostile name cannot break out of the literal.
     bind = db.get_bind()
     preparer = bind.dialect.identifier_preparer
-    if bind.dialect.name == "postgresql":
-        qualified = f"{preparer.quote('public')}.{preparer.quote(table)}"
-    else:
-        qualified = preparer.quote(table)
-    order_by = stable_order_sql(column_names, preparer)
-    stmt = text(f"SELECT * FROM {qualified} ORDER BY {order_by} LIMIT :limit OFFSET :offset")
-    rows = db.execute(stmt, {"limit": limit, "offset": offset}).mappings().all()
-    return [dict(r) for r in rows]
+    qualified = _qualified_table(bind, preparer, table)
+    filters = parse_equality_filters(request.query_params, column_names)
+    where_sql, filter_params = _where_clause(filters, preparer)
+    order_by = order_by_sql(column_names, preparer, sort)
+
+    count = db.execute(
+        text(f"SELECT COUNT(*) FROM {qualified}{where_sql}"), filter_params
+    ).scalar_one()
+    rows = (
+        db.execute(
+            text(
+                f"SELECT * FROM {qualified}{where_sql} "
+                f"ORDER BY {order_by} LIMIT :limit OFFSET :offset"
+            ),
+            {**filter_params, "limit": limit, "offset": offset},
+        )
+        .mappings()
+        .all()
+    )
+    return {
+        "items": [dict(r) for r in rows],
+        "limit": limit,
+        "offset": offset,
+        "count": count,
+    }
