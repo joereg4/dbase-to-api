@@ -73,6 +73,15 @@ def test_dynamic_api_endpoints_end_to_end():
     filtered = r.json()
     assert filtered["count"] == 1
     assert filtered["items"][0]["name"] == "Alpha"
+
+    r = requests.get(f"{base_url}/db/tables/sample_people/rows?id=1", timeout=5)
+    r.raise_for_status()
+    by_id = r.json()
+    assert by_id["count"] == 1
+    assert by_id["items"][0]["name"] == "Alpha"
+
+    r = requests.get(f"{base_url}/db/tables/sample_people/rows?id=nope", timeout=5)
+    assert r.status_code == 400
     recno = filtered["items"][0]["dbf_recno"]
 
     r = requests.get(f"{base_url}/db/tables/sample_people/rows/{recno}", timeout=5)

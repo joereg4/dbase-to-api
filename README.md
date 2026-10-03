@@ -75,7 +75,7 @@ curl http://localhost:8000/db/tables/your_table/rows/1
 
 Row listing contract
 - `GET /db/tables/{table}/rows` → `{items, limit, offset, count}`
-- Equality filters: real column names as query params (unknown → 400)
+- Equality filters: real column names as query params. Values are parsed as the column type (a bad value → 400, an unknown column → 400). Columns named `limit`, `offset`, or `sort` are filtered as `filter.<column>` so those names stay available as controls
 - Sort: `?sort=col` or `?sort=-col` (default: `dbf_recno`)
 - `GET /db/tables/{table}/rows/{dbf_recno}` → one row (404 if missing)
 
@@ -83,12 +83,14 @@ Table naming and schema inference
 - Table names are derived from the `.dbf` basename: lowercased, non-alphanumeric characters replaced with `_`, leading digits prefixed with `t_`, truncated to 63 characters (e.g. `Foo-Bar.DBF` → `foo_bar`, `123data.dbf` → `t_123data`)
 - Two different basenames that sanitize to the same table name cause an import error (rename one file before import)
 - Character fields → `VARCHAR`; memo (`M`) → `TEXT` (`.dbf` length is the memo pointer width only)
-- Whole-number `N`/`F` → `INTEGER` (width ≤ 9), `BIGINT` (≤ 18), or `NUMERIC` if wider; decimals → `NUMERIC(precision, scale)`
+- `G`, `P`, and non-Visual-FoxPro `B` → `BYTEA`. Visual FoxPro `B` (file versions `0x30`–`0x32`) → double precision
+- Whole-number `N` → `INTEGER` (width ≤ 9), `BIGINT` (≤ 18), or `NUMERIC` if wider; decimals → `NUMERIC(precision, scale)`
+- `F` → unbounded `NUMERIC`, because dbfread returns binary floats (fractions and scientific notation)
 - Dates → `DATE`, datetimes → `TIMESTAMP` (if present)
-- Each table gets a `dbf_recno` primary key (1-based source order); row pages order by it
+- Each table gets a `dbf_recno` primary key: the 1-based physical record number (xBase `RECNO()`). Deleted records are omitted and their numbers are not reused. Row pages order by it
 - Column names are lowercased; collisions after lowercasing get numeric suffixes (`name`, `name_2`, …)
-- Full refresh loads a staging table then renames it; a failed reload leaves the previous table intact
-- Missing `.dbt` memo files yield empty memo values and a warning when the `.dbf` has memo fields
+- Full refresh loads `import_staging` on PostgreSQL (SQLite uses a quoted name that cannot match a sanitized basename) and swaps it into place. A failed reload leaves the previous table intact
+- Missing memo files yield empty memo values and a warning when the `.dbf` has an `M`, `G`, `P`, or non-Visual-FoxPro `B` field and dbfread found no memo file
 - Default `.dbf` encoding is `latin-1` (override with `DBF_ENCODING` in `.env`)
 
 Performance notes

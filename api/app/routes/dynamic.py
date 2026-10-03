@@ -1,8 +1,11 @@
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, text
+from sqlalchemy import types as satypes
 
 from ..deps import get_db
 
@@ -11,16 +14,17 @@ router = APIRouter()
 
 DBF_RECNO = "dbf_recno"
 _RESERVED_ROW_PARAMS = frozenset({"limit", "offset", "sort"})
+_FILTER_PREFIX = "filter."
 
 
-def _table_column_names(db: Session, table: str) -> list[str] | None:
-    """Return column names for a public table, or None if the table is absent."""
+def _table_column_names(db: Session, table: str) -> dict[str, satypes.TypeEngine] | None:
+    """Return columns for a public table, or None if the table is absent."""
     bind = db.get_bind()
     insp = inspect(bind)
     schema = "public" if bind.dialect.name == "postgresql" else None
     if table not in insp.get_table_names(schema=schema):
         return None
-    return [c["name"] for c in insp.get_columns(table, schema=schema)]
+    return {c["name"]: c["type"] for c in insp.get_columns(table, schema=schema)}
 
 
 def _require_table_columns(db: Session, table: str) -> list[str]:
@@ -62,25 +66,67 @@ def order_by_sql(column_names: list[str], preparer, sort: str | None) -> str:
     return clause
 
 
+def coerce_filter_value(coltype: satypes.TypeEngine, raw: str):
+    """Parse a query string as the column type. Unparsable input is a 400."""
+    try:
+        return _coerce_filter_value(coltype, raw)
+    except (ValueError, InvalidOperation, TypeError, ArithmeticError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid filter value: {raw!r}") from exc
+
+
+def _coerce_filter_value(coltype: satypes.TypeEngine, raw: str):
+    if isinstance(coltype, satypes.Boolean):
+        lowered = raw.strip().lower()
+        if lowered in {"true", "t", "1", "yes", "y"}:
+            return True
+        if lowered in {"false", "f", "0", "no", "n"}:
+            return False
+        raise ValueError(raw)
+    # BigInteger and SmallInteger subclass Integer. Check them before Numeric.
+    if isinstance(coltype, satypes.Integer):
+        return int(raw)
+    if isinstance(coltype, satypes.Numeric):
+        return Decimal(raw)
+    if isinstance(coltype, satypes.Float):
+        return float(raw)
+    # DateTime subclasses Date.
+    if isinstance(coltype, satypes.DateTime):
+        return datetime.fromisoformat(raw)
+    if isinstance(coltype, satypes.Date):
+        return date.fromisoformat(raw)
+    return raw
+
+
 def parse_equality_filters(
-    query_params, column_names: list[str], reserved: frozenset[str] = _RESERVED_ROW_PARAMS
-) -> dict[str, str]:
-    """Keep only equality filters whose keys are real column names."""
-    filters: dict[str, str] = {}
+    query_params, columns, reserved: frozenset[str] = _RESERVED_ROW_PARAMS
+) -> dict:
+    """Keep equality filters whose keys are real columns.
+
+    ``columns`` is a name→type map, or a list of names when every value stays
+    a string. ``limit``, ``offset``, and ``sort`` stay control parameters.
+    A column with one of those names is filtered as ``filter.<column>``.
+    """
+    typed = isinstance(columns, dict)
+    names = columns if typed else set(columns)
+    filters: dict = {}
     for key, value in query_params.items():
-        if key in reserved:
+        if key.startswith(_FILTER_PREFIX):
+            column = key[len(_FILTER_PREFIX) :]
+        elif key in reserved:
             continue
-        if key not in column_names:
-            raise HTTPException(status_code=400, detail=f"Unknown filter column: {key}")
-        filters[key] = value
+        else:
+            column = key
+        if column not in names:
+            raise HTTPException(status_code=400, detail=f"Unknown filter column: {column}")
+        filters[column] = coerce_filter_value(columns[column], value) if typed else value
     return filters
 
 
-def _where_clause(filters: dict[str, str], preparer) -> tuple[str, dict[str, str]]:
+def _where_clause(filters: dict, preparer) -> tuple[str, dict]:
     if not filters:
         return "", {}
     parts: list[str] = []
-    params: dict[str, str] = {}
+    params: dict = {}
     for i, (col, value) in enumerate(filters.items()):
         params[f"f{i}"] = value
         parts.append(f"{preparer.quote(col)} = :f{i}")
@@ -153,14 +199,15 @@ def list_rows(
     offset: Annotated[int, Query(ge=0)] = 0,
     sort: Annotated[str | None, Query()] = None,
 ) -> dict:
-    column_names = _require_table_columns(db, table)
+    columns = _require_table_columns(db, table)
+    column_names = list(columns)
 
     # Identifiers cannot be bound as parameters. The dialect preparer escapes
     # embedded double-quotes so a hostile name cannot break out of the literal.
     bind = db.get_bind()
     preparer = bind.dialect.identifier_preparer
     qualified = _qualified_table(bind, preparer, table)
-    filters = parse_equality_filters(request.query_params, column_names)
+    filters = parse_equality_filters(request.query_params, columns)
     where_sql, filter_params = _where_clause(filters, preparer)
     order_by = order_by_sql(column_names, preparer, sort)
 
