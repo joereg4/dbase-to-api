@@ -5,7 +5,6 @@ from pathlib import Path
 
 import requests
 
-
 NATURAL_EARTH_URLS = [
     # Use the NACIS CDN (current, stable)
     (
