@@ -117,7 +117,33 @@ def _quoted(preparer, name: str, schema: str | None = None) -> str:
     return quoted
 
 
-def normalize_dbf_rows(rows: List[Dict[str, Any]], dbf: DBF) -> List[Dict[str, Any]]:
+def physical_recnos(dbf: DBF) -> List[int]:
+    """1-based file slots of records that are not deleted.
+
+    xBase RECNO() counts every slot, including rows flagged ``*``. The values
+    returned here are those numbers for the rows ``DBF`` yields.
+    """
+    header = dbf.header
+    recnos: List[int] = []
+    recno = 0
+    with open(dbf.filename, "rb") as infile:
+        infile.seek(header.headerlen)
+        while True:
+            sep = infile.read(1)
+            if sep in (b"\x1a", b""):
+                break
+            recno += 1
+            if sep == b" ":
+                recnos.append(recno)
+            infile.seek(header.recordlen - 1, 1)
+    return recnos
+
+
+def normalize_dbf_rows(
+    rows: List[Dict[str, Any]], dbf: DBF, recnos: List[int] | None = None
+) -> List[Dict[str, Any]]:
+    if recnos is not None and len(recnos) != len(rows):
+        raise ValueError(f"record numbers ({len(recnos)}) do not match rows ({len(rows)})")
     seen_names: set[str] = {DBF_RECNO}
     name_map = {
         f.name: deduplicate_column_name(f.name.lower(), seen_names)
@@ -129,9 +155,17 @@ def normalize_dbf_rows(rows: List[Dict[str, Any]], dbf: DBF) -> List[Dict[str, A
         mapped = {
             name_map.get(k, k.lower() if isinstance(k, str) else k): v for k, v in row.items()
         }
-        mapped[DBF_RECNO] = i
+        mapped[DBF_RECNO] = recnos[i - 1] if recnos is not None else i
         normalized.append(mapped)
     return normalized
+
+
+def _rows_for_import(dbf: DBF) -> List[Dict[str, Any]]:
+    raw = [dict(row) for row in dbf]
+    # A physical slot exists only when the rows came from a file on disk.
+    if getattr(dbf, "filename", None) and getattr(dbf, "header", None):
+        return normalize_dbf_rows(raw, dbf, recnos=physical_recnos(dbf))
+    return normalize_dbf_rows(raw, dbf)
 
 
 def _field_needs_memo(field, dbversion: int | None) -> bool:
@@ -166,7 +200,7 @@ def load_dbf_into_postgres(engine: Engine, dbf_path: str) -> None:
     # longer than PostgreSQL's 63-byte identifier limit.
     schema, staging_name = staging_location(engine.dialect.name, table_name)
     table = infer_sqlalchemy_table_from_dbf(dbf, MetaData(), staging_name, schema=schema)
-    rows = normalize_dbf_rows([dict(r) for r in dbf], dbf)
+    rows = _rows_for_import(dbf)
 
     preparer = engine.dialect.identifier_preparer
     live_schema = "public" if engine.dialect.name == "postgresql" else None
