@@ -74,15 +74,20 @@ curl "http://localhost:8000/db/tables/your_table/rows?limit=10&offset=0"
 Table naming and schema inference
 - Table names are derived from the `.dbf` basename: lowercased, non-alphanumeric characters replaced with `_`, leading digits prefixed with `t_`, truncated to 63 characters (e.g. `Foo-Bar.DBF` → `foo_bar`, `123data.dbf` → `t_123data`)
 - Two different basenames that sanitize to the same table name cause an import error (rename one file before import)
-- Strings map to `TEXT`, numbers to `NUMERIC(precision, scale)` or `INTEGER` when safe
-- Dates map to `DATE`, datetimes to `TIMESTAMP` (if present)
-- Column names are lowercased; duplicate column names after lowercasing are disambiguated with numeric suffixes (`name`, `name_2`, …)
+- Character fields → `VARCHAR`; memo (`M`) → `TEXT` (`.dbf` length is the memo pointer width only)
+- Whole-number `N`/`F` → `INTEGER` (width ≤ 9), `BIGINT` (≤ 18), or `NUMERIC` if wider; decimals → `NUMERIC(precision, scale)`
+- Dates → `DATE`, datetimes → `TIMESTAMP` (if present)
+- Each table gets a `dbf_recno` primary key (1-based source order); row pages order by it
+- Column names are lowercased; collisions after lowercasing get numeric suffixes (`name`, `name_2`, …)
+- Full refresh loads a staging table then renames it; a failed reload leaves the previous table intact
+- Missing `.dbt` memo files yield empty memo values and a warning when the `.dbf` has memo fields
 - Default `.dbf` encoding is `latin-1` (override with `DBF_ENCODING` in `.env`)
 
 Performance notes
 - Large imports: prefer running importer once, then start API
 - Index after import if you need fast filtering/sorting
 - Limit/offset are bounded to protect API; adjust in code if needed
+- Re-import existing databases once to add `dbf_recno` and stable paging
 
 Troubleshooting
 - Port 8000 in use: stop the other service or change the published port

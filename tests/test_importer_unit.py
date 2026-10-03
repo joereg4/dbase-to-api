@@ -1,8 +1,17 @@
-from sqlalchemy import Integer, String, Numeric, Date, DateTime, Boolean
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Integer,
+    MetaData,
+    Numeric,
+    String,
+    Text,
+)
 
-
-# We test the pure functions without requiring a real DBF file or a database.
-from importer.convert_dbase import map_dbase_type, infer_sqlalchemy_table_from_dbf
+# Pure-function tests: no real DBF file or database required.
+from importer.convert_dbase import infer_sqlalchemy_table_from_dbf, map_dbase_type
 
 
 class FakeField:
@@ -21,12 +30,15 @@ class FakeDBF:
 
 
 def test_map_dbase_type_basic_mappings():
-    assert isinstance(map_dbase_type(FakeField("A", "N", length=10)), Integer)
+    assert isinstance(map_dbase_type(FakeField("A", "N", length=9)), Integer)
+    assert isinstance(map_dbase_type(FakeField("A10", "N", length=10)), BigInteger)
+    assert isinstance(map_dbase_type(FakeField("A20", "N", length=20)), Numeric)
     assert isinstance(map_dbase_type(FakeField("B", "F", length=12, decimal_count=2)), Numeric)
     assert isinstance(map_dbase_type(FakeField("C", "D")), Date)
     assert isinstance(map_dbase_type(FakeField("D", "T")), DateTime)
     assert isinstance(map_dbase_type(FakeField("E", "L")), Boolean)
-    # default to String when unrecognized
+    assert isinstance(map_dbase_type(FakeField("Notes", "M", length=10)), Text)
+    # Unrecognized / character → String
     s = map_dbase_type(FakeField("F", "C", length=40))
     assert isinstance(s, String)
 
@@ -37,24 +49,23 @@ def test_infer_table_from_dbf_lowercases_names_and_creates_columns():
         FakeField("Name", "C", length=255),
         FakeField("Amt", "F", length=12, decimal_count=2),
     ]
-    dbf = FakeDBF(fields)
-
-    from sqlalchemy import MetaData
-
-    md = MetaData()
-    table = infer_sqlalchemy_table_from_dbf(dbf, md, "sample")
+    table = infer_sqlalchemy_table_from_dbf(FakeDBF(fields), MetaData(), "sample")
 
     assert table.name == "sample"
-    col_names = [c.name for c in table.columns]
-    assert col_names == ["id", "name", "amt"]
-
-    # spot-check types
-    assert isinstance(table.c.id.type, Integer)
+    assert [c.name for c in table.columns] == ["id", "name", "amt", "dbf_recno"]
+    assert isinstance(table.c.id.type, BigInteger)
     assert isinstance(table.c.name.type, String)
     assert isinstance(table.c.amt.type, Numeric)
+    assert isinstance(table.c.dbf_recno.type, Integer)
+    assert table.c.dbf_recno.primary_key
 
 
 def test_map_dbase_type_string_default_length():
     s = map_dbase_type(FakeField("X", "C", length=None))
-    # default should be a String with some positive length
     assert isinstance(s, String)
+
+
+def test_infer_table_renames_source_dbf_recno_column():
+    fields = [FakeField("dbf_recno", "N", length=4), FakeField("Name", "C", length=20)]
+    table = infer_sqlalchemy_table_from_dbf(FakeDBF(fields), MetaData(), "sample")
+    assert [c.name for c in table.columns] == ["dbf_recno_2", "name", "dbf_recno"]
