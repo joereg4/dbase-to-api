@@ -9,9 +9,9 @@ from sqlalchemy import create_engine, Table, Column, MetaData, text, types as sa
 from sqlalchemy.engine import Engine
 
 try:
-    from .naming import sanitize_table_name
+    from .naming import sanitize_table_name, staging_location
 except ImportError:
-    from naming import sanitize_table_name
+    from naming import sanitize_table_name, staging_location
 
 
 log = logging.getLogger("importer")
@@ -94,7 +94,9 @@ def _dbversion(dbf: DBF) -> int | None:
     return version if isinstance(version, int) else None
 
 
-def infer_sqlalchemy_table_from_dbf(dbf: DBF, metadata: MetaData, table_name: str) -> Table:
+def infer_sqlalchemy_table_from_dbf(
+    dbf: DBF, metadata: MetaData, table_name: str, schema: str | None = None
+) -> Table:
     columns: List[Column] = []
     seen_names: set[str] = {DBF_RECNO}
     dbversion = _dbversion(dbf)
@@ -105,7 +107,14 @@ def infer_sqlalchemy_table_from_dbf(dbf: DBF, metadata: MetaData, table_name: st
         colname = deduplicate_column_name(f.name.lower(), seen_names)
         columns.append(Column(colname, coltype))
     columns.append(Column(DBF_RECNO, satypes.Integer, primary_key=True))
-    return Table(table_name, metadata, *columns)
+    return Table(table_name, metadata, *columns, schema=schema)
+
+
+def _quoted(preparer, name: str, schema: str | None = None) -> str:
+    quoted = preparer.quote(name)
+    if schema:
+        return f"{preparer.quote(schema)}.{quoted}"
+    return quoted
 
 
 def normalize_dbf_rows(rows: List[Dict[str, Any]], dbf: DBF) -> List[Dict[str, Any]]:
@@ -152,22 +161,29 @@ def load_dbf_into_postgres(engine: Engine, dbf_path: str) -> None:
     dbf = DBF(dbf_path, encoding=get_dbf_encoding(), ignore_missing_memofile=True)
     _warn_if_memo_missing(dbf, dbf_path)
 
-    # Stage → rename keeps the live table if create/insert fails
-    # (SQLite often does not roll back DDL).
-    staging_name = f"{table_name}__loading"
-    table = infer_sqlalchemy_table_from_dbf(dbf, MetaData(), staging_name)
+    # Stage outside any sanitized basename, then swap. SQLite often does not
+    # roll back DDL, and `{table}__loading` can itself be a live table or
+    # longer than PostgreSQL's 63-byte identifier limit.
+    schema, staging_name = staging_location(engine.dialect.name, table_name)
+    table = infer_sqlalchemy_table_from_dbf(dbf, MetaData(), staging_name, schema=schema)
     rows = normalize_dbf_rows([dict(r) for r in dbf], dbf)
 
     preparer = engine.dialect.identifier_preparer
-    live = preparer.quote(table_name)
-    staging = preparer.quote(staging_name)
+    live_schema = "public" if engine.dialect.name == "postgresql" else None
+    live = _quoted(preparer, table_name, live_schema)
+    staging = _quoted(preparer, staging_name, schema)
     with engine.begin() as conn:
+        if schema:
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {preparer.quote(schema)}"))
         conn.execute(text(f"DROP TABLE IF EXISTS {staging}"))
         table.create(conn, checkfirst=False)
         if rows:
             conn.execute(table.insert(), rows)
         conn.execute(text(f"DROP TABLE IF EXISTS {live}"))
-        conn.execute(text(f"ALTER TABLE {staging} RENAME TO {live}"))
+        if schema:
+            conn.execute(text(f"ALTER TABLE {staging} SET SCHEMA {preparer.quote(live_schema)}"))
+        else:
+            conn.execute(text(f"ALTER TABLE {staging} RENAME TO {preparer.quote(table_name)}"))
 
 
 def main() -> int:
