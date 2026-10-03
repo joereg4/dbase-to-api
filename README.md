@@ -75,7 +75,7 @@ curl http://localhost:8000/db/tables/your_table/rows/1
 
 Row listing contract
 - `GET /db/tables/{table}/rows` → `{items, limit, offset, count}`
-- Equality filters: real column names as query params (unknown → 400)
+- Equality filters: real column names as query params. Values are parsed as the column type (a bad value → 400, an unknown column → 400). Columns named `limit`, `offset`, or `sort` are filtered as `filter.<column>` so those names stay available as controls
 - Sort: `?sort=col` or `?sort=-col` (default: `dbf_recno`)
 - `GET /db/tables/{table}/rows/{dbf_recno}` → one row (404 if missing)
 
