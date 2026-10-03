@@ -46,6 +46,22 @@ def test_import_does_not_drop_a_table_named_with_the_loading_suffix(tmp_path):
     assert fresh == "fresh"
 
 
+def test_postgres_import_does_not_drop_a_loading_suffix_table(pg_engine, tmp_path):
+    live = pg_engine.track_table(f"pytest_live_{uuid.uuid4().hex[:8]}")
+    loading = pg_engine.track_table(f"{live}__loading")
+    _people(tmp_path / f"{loading}.dbf", "keep")
+    _people(tmp_path / f"{live}.dbf", "fresh")
+
+    load_dbf_into_postgres(pg_engine, str(tmp_path / f"{loading}.dbf"))
+    load_dbf_into_postgres(pg_engine, str(tmp_path / f"{live}.dbf"))
+
+    with pg_engine.connect() as conn:
+        kept = conn.execute(text(f'SELECT name FROM public."{loading}"')).scalar_one()
+        fresh = conn.execute(text(f'SELECT name FROM public."{live}"')).scalar_one()
+    assert kept == "keep"
+    assert fresh == "fresh"
+
+
 def test_63_byte_table_name_imports_on_postgres(pg_engine, tmp_path):
     table = pg_engine.track_table("n" * 63)
     path = tmp_path / f"{table}.dbf"
