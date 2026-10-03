@@ -9,7 +9,6 @@ from sqlalchemy import types as satypes
 
 from ..deps import get_db
 
-
 router = APIRouter()
 
 DBF_RECNO = "dbf_recno"
@@ -130,14 +129,12 @@ def _where_clause(filters: dict, preparer) -> tuple[str, dict]:
 
 @router.get("/tables")
 def list_tables(db: Session = Depends(get_db)) -> list[str]:
-    sql = text(
-        """
+    sql = text("""
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
         ORDER BY table_name
-        """
-    )
+        """)
     rows = db.execute(sql).scalars().all()
     return rows
 
@@ -145,24 +142,20 @@ def list_tables(db: Session = Depends(get_db)) -> list[str]:
 @router.get("/tables/{table}/columns")
 def list_columns(table: str, db: Session = Depends(get_db)) -> list[dict]:
     # Validate table existence in 'public'
-    exists_sql = text(
-        """
+    exists_sql = text("""
         SELECT 1
         FROM information_schema.tables
         WHERE table_schema='public' AND table_name=:t
-        """
-    )
+        """)
     if not db.execute(exists_sql, {"t": table}).first():
         raise HTTPException(status_code=404, detail="Table not found")
 
-    sql = text(
-        """
+    sql = text("""
         SELECT column_name AS name, data_type AS type
         FROM information_schema.columns
         WHERE table_schema='public' AND table_name=:t
         ORDER BY ordinal_position
-        """
-    )
+        """)
     return [dict(r) for r in db.execute(sql, {"t": table}).mappings().all()]
 
 

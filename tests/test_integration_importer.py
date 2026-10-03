@@ -8,7 +8,6 @@ import pytest
 
 from tests.conftest import PROJECT_ROOT, compose_test_env
 
-
 DATA_DIR = PROJECT_ROOT / "data"
 
 

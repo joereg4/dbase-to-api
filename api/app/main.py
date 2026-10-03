@@ -8,7 +8,6 @@ from fastapi.responses import JSONResponse
 from . import db
 from .routes import dynamic
 
-
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
