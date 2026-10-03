@@ -17,6 +17,8 @@ except ImportError:
 log = logging.getLogger("importer")
 
 DBF_RECNO = "dbf_recno"
+# Visual FoxPro stores type B as an IEEE double. Other versions store a memo pointer.
+_VFP_DOUBLE_VERSIONS = frozenset({0x30, 0x31, 0x32})
 
 
 def get_dbf_encoding() -> str:
@@ -31,12 +33,23 @@ def get_database_url() -> str:
     return url
 
 
-def map_dbase_type(field) -> satypes.TypeEngine:
+def _is_vfp_double(dbversion: int | None, size: int | None) -> bool:
+    if dbversion in _VFP_DOUBLE_VERSIONS:
+        return True
+    # No header: an 8-byte B matches the Visual FoxPro double layout.
+    return dbversion is None and size == 8
+
+
+def map_dbase_type(field, dbversion: int | None = None) -> satypes.TypeEngine:
     ft = (field.type).upper()
     size = getattr(field, "length", None) or getattr(field, "size", None)
     deci = getattr(field, "decimal_count", None) or getattr(field, "decimal", 0) or 0
 
-    if ft in ("N", "F"):
+    if ft == "F":
+        # dbfread parseF returns a binary float (fractions and scientific
+        # notation). The N width ladder would round or overflow those values.
+        return satypes.Numeric()
+    if ft == "N":
         # Whole-number dBASE fields can be up to 20 digits; only narrow
         # widths fit in INTEGER / BIGINT without overflow.
         if deci > 0 or not size:
@@ -55,7 +68,13 @@ def map_dbase_type(field) -> satypes.TypeEngine:
     if ft == "M":
         # Field length is the memo pointer width (usually 10), not text size.
         return satypes.Text()
-    # Character fields and unrecognized types → VARCHAR
+    if ft in ("G", "P"):
+        return satypes.LargeBinary()
+    if ft == "B":
+        if _is_vfp_double(dbversion, size):
+            return satypes.Float()
+        return satypes.LargeBinary()
+    # Unrecognized types keep the declared character width instead of TEXT.
     return satypes.String(size or 255)
 
 
@@ -69,13 +88,20 @@ def deduplicate_column_name(name: str, seen: set[str]) -> str:
     return candidate
 
 
+def _dbversion(dbf: DBF) -> int | None:
+    header = getattr(dbf, "header", None)
+    version = getattr(header, "dbversion", None)
+    return version if isinstance(version, int) else None
+
+
 def infer_sqlalchemy_table_from_dbf(dbf: DBF, metadata: MetaData, table_name: str) -> Table:
     columns: List[Column] = []
     seen_names: set[str] = {DBF_RECNO}
+    dbversion = _dbversion(dbf)
     for f in dbf.fields:
         if f.name == "":
             continue
-        coltype = map_dbase_type(f)
+        coltype = map_dbase_type(f, dbversion=dbversion)
         colname = deduplicate_column_name(f.name.lower(), seen_names)
         columns.append(Column(colname, coltype))
     columns.append(Column(DBF_RECNO, satypes.Integer, primary_key=True))
@@ -99,9 +125,21 @@ def normalize_dbf_rows(rows: List[Dict[str, Any]], dbf: DBF) -> List[Dict[str, A
     return normalized
 
 
+def _field_needs_memo(field, dbversion: int | None) -> bool:
+    ftype = (getattr(field, "type", "") or "").upper()
+    if ftype in {"M", "G", "P"}:
+        return True
+    if ftype == "B":
+        size = getattr(field, "length", None) or getattr(field, "size", None)
+        return not _is_vfp_double(dbversion, size)
+    return False
+
+
 def _warn_if_memo_missing(dbf: DBF, dbf_path: str) -> None:
-    has_memo = any(getattr(f, "type", "").upper() == "M" for f in dbf.fields)
-    if has_memo and getattr(dbf, "memo", None) is None:
+    # dbfread records the memo path on memofilename. It never sets .memo.
+    dbversion = _dbversion(dbf)
+    needs_memo = any(_field_needs_memo(field, dbversion) for field in dbf.fields)
+    if needs_memo and getattr(dbf, "memofilename", None) is None:
         log.warning(
             "Memo file missing for %s; memo field values will be empty",
             dbf_path,
