@@ -56,7 +56,7 @@ Tests run against PostgreSQL. `make test-unit` starts the database and fails if 
 
 **Caveats:**
 - The `tester` service mounts `/var/run/docker.sock` so integration tests can run nested compose commands. Do not use this on untrusted hosts.
-- `make test-integration` deletes `data/*.dbf` before generating a sample, and one importer test runs `docker compose down` at the end. Stop local stacks first or use a clean clone if you need to preserve running services or sample data.
+- `make test` and `make test-integration` delete `data/*.dbf` before generating a sample. Copy those files aside if you need to keep them. The tests leave PostgreSQL running.
 
 ## Exporting data
 

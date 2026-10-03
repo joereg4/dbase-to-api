@@ -156,7 +156,7 @@ make test        # unit + integration, in Docker
 
 Notes:
 - Integration tests run in the `tester` container and call Docker from inside; ensure Docker Desktop file sharing is configured (see below).
-- `make test-integration` deletes `data/*.dbf` and one importer test runs `docker compose down` when it finishes.
+- `make test` and `make test-integration` delete `data/*.dbf` before generating a sample. They leave PostgreSQL running.
 
 Mac users: enable Docker Desktop file sharing
 
