@@ -1,11 +1,14 @@
 """Shared pytest helpers."""
 
 import os
+import re
 from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+
+_TABLE_NAME = re.compile(r"[a-z0-9_]+")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -24,7 +27,7 @@ def compose_test_env(base: dict | None = None) -> dict:
     return env
 
 
-def _postgres_url() -> str:
+def postgres_url() -> str:
     return os.getenv(
         "TEST_DATABASE_URL",
         os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@db:5432/dbase"),
@@ -33,18 +36,20 @@ def _postgres_url() -> str:
 
 @pytest.fixture()
 def pg_engine():
-    """Connect to the compose database. Skip when it is unreachable."""
-    engine = create_engine(_postgres_url(), pool_pre_ping=True)
+    """Connect to PostgreSQL. A missing database fails the test."""
+    engine = create_engine(postgres_url(), pool_pre_ping=True)
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
     except SQLAlchemyError as exc:
         engine.dispose()
-        pytest.skip(f"PostgreSQL not available: {exc}")
+        pytest.fail(f"PostgreSQL is required: {exc}")
 
     created: list[str] = []
 
     def track(name: str) -> str:
+        if not _TABLE_NAME.fullmatch(name):
+            raise ValueError(f"refusing to track table name {name!r}")
         created.append(name)
         return name
 

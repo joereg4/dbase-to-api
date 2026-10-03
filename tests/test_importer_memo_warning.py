@@ -1,6 +1,5 @@
 import logging
-
-from sqlalchemy import create_engine
+import uuid
 
 from importer import convert_dbase
 from tests.test_importer_unit import FakeField
@@ -17,7 +16,8 @@ class FakeMemoDBF:
         return iter([])
 
 
-def test_load_warns_when_memofilename_missing(tmp_path, caplog, monkeypatch):
+def test_load_warns_when_memofilename_missing(pg_engine, tmp_path, caplog, monkeypatch):
+    table = pg_engine.track_table(f"pytest_memo_{uuid.uuid4().hex[:8]}")
     monkeypatch.setattr(
         convert_dbase,
         "DBF",
@@ -25,15 +25,15 @@ def test_load_warns_when_memofilename_missing(tmp_path, caplog, monkeypatch):
             [FakeField("Notes", "M", length=10)], memofilename=None, memo=object()
         ),
     )
-    engine = create_engine(f"sqlite:///{tmp_path / 'db.sqlite'}")
 
     with caplog.at_level(logging.WARNING, logger="importer"):
-        convert_dbase.load_dbf_into_postgres(engine, str(tmp_path / "notes.dbf"))
+        convert_dbase.load_dbf_into_postgres(pg_engine, str(tmp_path / f"{table}.dbf"))
 
     assert any("Memo file missing" in r.message for r in caplog.records)
 
 
-def test_load_does_not_warn_when_memofile_is_present(tmp_path, caplog, monkeypatch):
+def test_load_does_not_warn_when_memofile_is_present(pg_engine, tmp_path, caplog, monkeypatch):
+    table = pg_engine.track_table(f"pytest_memo_{uuid.uuid4().hex[:8]}")
     monkeypatch.setattr(
         convert_dbase,
         "DBF",
@@ -41,9 +41,8 @@ def test_load_does_not_warn_when_memofile_is_present(tmp_path, caplog, monkeypat
             [FakeField("Notes", "M", length=10)], memofilename="notes.dbt", memo=None
         ),
     )
-    engine = create_engine(f"sqlite:///{tmp_path / 'db.sqlite'}")
 
     with caplog.at_level(logging.WARNING, logger="importer"):
-        convert_dbase.load_dbf_into_postgres(engine, str(tmp_path / "notes.dbf"))
+        convert_dbase.load_dbf_into_postgres(pg_engine, str(tmp_path / f"{table}.dbf"))
 
     assert not any("Memo file missing" in r.message for r in caplog.records)

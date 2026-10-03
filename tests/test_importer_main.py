@@ -10,6 +10,7 @@ except ImportError:  # pragma: no cover
     pytest.skip("dbf library not installed", allow_module_level=True)
 
 from importer import convert_dbase
+from tests.conftest import postgres_url
 
 
 def _write_sample_dbf(path: Path) -> None:
@@ -26,12 +27,13 @@ def test_main_returns_zero_when_no_dbf_files(tmp_path, monkeypatch):
     monkeypatch.setattr(
         convert_dbase,
         "get_database_url",
-        lambda: f"sqlite:///{tmp_path/'db.sqlite'}",
+        postgres_url,
     )
     assert convert_dbase.main() == 0
 
 
-def test_main_discovers_dbf_files_recursively(tmp_path, monkeypatch):
+def test_main_discovers_dbf_files_recursively(tmp_path, monkeypatch, pg_engine):
+    pg_engine.track_table("nested")
     nested = tmp_path / "subdir"
     nested.mkdir()
     good = nested / "nested.dbf"
@@ -40,7 +42,7 @@ def test_main_discovers_dbf_files_recursively(tmp_path, monkeypatch):
     monkeypatch.setattr(
         convert_dbase,
         "get_database_url",
-        lambda: f"sqlite:///{tmp_path/'db.sqlite'}",
+        postgres_url,
     )
 
     real_glob = convert_dbase.glob.glob
@@ -55,7 +57,8 @@ def test_main_discovers_dbf_files_recursively(tmp_path, monkeypatch):
     assert convert_dbase.main() == 0
 
 
-def test_main_returns_nonzero_when_any_file_fails(tmp_path, monkeypatch, caplog):
+def test_main_returns_nonzero_when_any_file_fails(tmp_path, monkeypatch, caplog, pg_engine):
+    pg_engine.track_table("good")
     good = tmp_path / "good.dbf"
     _write_sample_dbf(good)
     bad_path = str(tmp_path / "broken.dbf")
@@ -66,7 +69,7 @@ def test_main_returns_nonzero_when_any_file_fails(tmp_path, monkeypatch, caplog)
     monkeypatch.setattr(
         convert_dbase,
         "get_database_url",
-        lambda: f"sqlite:///{tmp_path/'db.sqlite'}",
+        postgres_url,
     )
 
     real_loader = convert_dbase.load_dbf_into_postgres

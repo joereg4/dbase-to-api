@@ -19,25 +19,21 @@ _FILTER_PREFIX = "filter."
 
 def _table_column_names(db: Session, table: str) -> dict[str, satypes.TypeEngine] | None:
     """Return columns for a public table, or None if the table is absent."""
-    bind = db.get_bind()
-    insp = inspect(bind)
-    schema = "public" if bind.dialect.name == "postgresql" else None
-    if table not in insp.get_table_names(schema=schema):
+    insp = inspect(db.get_bind())
+    if table not in insp.get_table_names(schema="public"):
         return None
-    return {c["name"]: c["type"] for c in insp.get_columns(table, schema=schema)}
+    return {c["name"]: c["type"] for c in insp.get_columns(table, schema="public")}
 
 
-def _require_table_columns(db: Session, table: str) -> list[str]:
-    column_names = _table_column_names(db, table)
-    if column_names is None:
+def _require_table_columns(db: Session, table: str) -> dict[str, satypes.TypeEngine]:
+    columns = _table_column_names(db, table)
+    if columns is None:
         raise HTTPException(status_code=404, detail="Table not found")
-    return column_names
+    return columns
 
 
-def _qualified_table(bind, preparer, table: str) -> str:
-    if bind.dialect.name == "postgresql":
-        return f"{preparer.quote('public')}.{preparer.quote(table)}"
-    return preparer.quote(table)
+def _qualified_table(preparer, table: str) -> str:
+    return f"{preparer.quote('public')}.{preparer.quote(table)}"
 
 
 def stable_order_sql(column_names: list[str], preparer) -> str:
@@ -98,16 +94,15 @@ def _coerce_filter_value(coltype: satypes.TypeEngine, raw: str):
 
 
 def parse_equality_filters(
-    query_params, columns, reserved: frozenset[str] = _RESERVED_ROW_PARAMS
+    query_params,
+    columns: dict[str, satypes.TypeEngine],
+    reserved: frozenset[str] = _RESERVED_ROW_PARAMS,
 ) -> dict:
     """Keep equality filters whose keys are real columns.
 
-    ``columns`` is a name→type map, or a list of names when every value stays
-    a string. ``limit``, ``offset``, and ``sort`` stay control parameters.
+    ``limit``, ``offset``, and ``sort`` stay control parameters.
     A column with one of those names is filtered as ``filter.<column>``.
     """
-    typed = isinstance(columns, dict)
-    names = columns if typed else set(columns)
     filters: dict = {}
     for key, value in query_params.items():
         if key.startswith(_FILTER_PREFIX):
@@ -116,9 +111,9 @@ def parse_equality_filters(
             continue
         else:
             column = key
-        if column not in names:
+        if column not in columns:
             raise HTTPException(status_code=400, detail=f"Unknown filter column: {column}")
-        filters[column] = coerce_filter_value(columns[column], value) if typed else value
+        filters[column] = coerce_filter_value(columns[column], value)
     return filters
 
 
@@ -173,8 +168,8 @@ def list_columns(table: str, db: Session = Depends(get_db)) -> list[dict]:
 
 @router.get("/tables/{table}/rows/{dbf_recno}")
 def get_row(table: str, dbf_recno: int, db: Session = Depends(get_db)) -> dict:
-    column_names = _require_table_columns(db, table)
-    if DBF_RECNO not in column_names:
+    columns = _require_table_columns(db, table)
+    if DBF_RECNO not in columns:
         raise HTTPException(
             status_code=404,
             detail="Table has no dbf_recno column; re-import to enable row lookup",
@@ -182,7 +177,7 @@ def get_row(table: str, dbf_recno: int, db: Session = Depends(get_db)) -> dict:
 
     bind = db.get_bind()
     preparer = bind.dialect.identifier_preparer
-    qualified = _qualified_table(bind, preparer, table)
+    qualified = _qualified_table(preparer, table)
     stmt = text(f"SELECT * FROM {qualified} WHERE {preparer.quote(DBF_RECNO)} = :recno LIMIT 1")
     row = db.execute(stmt, {"recno": dbf_recno}).mappings().first()
     if row is None:
@@ -206,7 +201,7 @@ def list_rows(
     # embedded double-quotes so a hostile name cannot break out of the literal.
     bind = db.get_bind()
     preparer = bind.dialect.identifier_preparer
-    qualified = _qualified_table(bind, preparer, table)
+    qualified = _qualified_table(preparer, table)
     filters = parse_equality_filters(request.query_params, columns)
     where_sql, filter_params = _where_clause(filters, preparer)
     order_by = order_by_sql(column_names, preparer, sort)

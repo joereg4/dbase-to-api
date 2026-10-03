@@ -79,6 +79,5 @@ def test_importer_creates_table_and_rows(tmp_path: Path):
     )
     count = int(result.stdout.strip())
     assert count >= 3
-
-    # Teardown containers but keep volume for debugging; CI could prune if desired
-    subprocess.run(["docker", "compose", "down"], cwd=str(PROJECT_ROOT), check=True, env=env)
+    # Leave the stack up. This file runs in the same pytest process as the
+    # PostgreSQL unit tests, and `docker compose down` removes host `db`.

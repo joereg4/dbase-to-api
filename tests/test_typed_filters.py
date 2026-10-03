@@ -6,17 +6,7 @@ from decimal import Decimal
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import (
-    Boolean,
-    Column,
-    Date,
-    Integer,
-    MetaData,
-    Numeric,
-    String,
-    Table,
-    create_engine,
-)
+from sqlalchemy import Boolean, Column, Date, Integer, MetaData, Numeric, String, Table
 from sqlalchemy.orm import sessionmaker
 from starlette.requests import Request
 
@@ -114,16 +104,17 @@ def test_mistyped_filter_returns_400_on_postgres(pg_engine):
     assert exc.value.status_code == 400
 
 
-def test_reserved_column_name_filters_through_prefix():
-    engine = create_engine("sqlite:///:memory:")
+def test_reserved_column_name_filters_through_prefix(pg_engine):
+    table_name = pg_engine.track_table(f"pytest_sort_{uuid.uuid4().hex[:8]}")
     people = Table(
-        "people",
+        table_name,
         MetaData(),
         Column("sort", String(20)),
         Column("dbf_recno", Integer, primary_key=True),
+        schema="public",
     )
-    people.create(engine)
-    with engine.begin() as conn:
+    people.create(pg_engine)
+    with pg_engine.begin() as conn:
         conn.execute(
             people.insert(),
             [
@@ -131,10 +122,10 @@ def test_reserved_column_name_filters_through_prefix():
                 {"sort": "drop", "dbf_recno": 2},
             ],
         )
-    db = sessionmaker(bind=engine)()
+    db = sessionmaker(bind=pg_engine)()
     try:
         result = list_rows(
-            "people",
+            table_name,
             request=_request("filter.sort=keep"),
             db=db,
             limit=50,

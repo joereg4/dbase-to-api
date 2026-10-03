@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from importer.convert_dbase import load_dbf_into_postgres, normalize_dbf_rows
 from tests.dbf_bytes import write_dbf
@@ -28,18 +28,6 @@ def _deleted_middle(path) -> None:
             (False, ["Gamma"]),
         ],
     )
-
-
-def test_deleted_slot_keeps_its_record_number(tmp_path):
-    path = tmp_path / "people.dbf"
-    _deleted_middle(path)
-    engine = create_engine(f"sqlite:///{tmp_path / 'db.sqlite'}")
-
-    load_dbf_into_postgres(engine, str(path))
-
-    with engine.connect() as conn:
-        rows = conn.execute(text("SELECT name, dbf_recno FROM people ORDER BY dbf_recno")).all()
-    assert rows == [("Alpha", 1), ("Gamma", 3)]
 
 
 def test_deleted_slot_keeps_its_record_number_on_postgres(pg_engine, tmp_path):

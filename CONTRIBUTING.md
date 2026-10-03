@@ -39,7 +39,9 @@ Thanks for your interest in contributing!
 
 ## Running tests
 
-- Unit tests only (no live stack required):
+Tests run against PostgreSQL. `make test-unit` starts the database and fails if it is unreachable.
+
+- Unit tests:
   ```bash
   make test-unit
   ```
@@ -54,7 +56,7 @@ Thanks for your interest in contributing!
 
 **Caveats:**
 - The `tester` service mounts `/var/run/docker.sock` so integration tests can run nested compose commands. Do not use this on untrusted hosts.
-- `make test-integration` may run `docker compose down` and remove `data/*.dbf` during teardown. Stop local stacks first or use a clean clone if you need to preserve running services or sample data.
+- `make test` and `make test-integration` delete `data/*.dbf` before generating a sample. Copy those files aside if you need to keep them. The tests leave PostgreSQL running.
 
 ## Exporting data
 

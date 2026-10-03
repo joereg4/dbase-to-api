@@ -8,7 +8,7 @@ sample:
 	@docker compose run --rm tools python scripts/make_sample_dbf.py
 
 up-db:
-	@docker compose up -d db
+	@docker compose up -d --wait db
 
 import: up-db sample
 	@docker compose run --rm importer
@@ -16,10 +16,10 @@ import: up-db sample
 up-api: up-db
 	@docker compose up -d api
 
-test-unit:
+test-unit: up-db
 	@docker compose run -e PYTHONPATH=$$(pwd) --rm tools pytest -q
 
-# Integration tests run on the host so they can call docker-compose inside tests
+# Integration tests run in the tester container, which calls compose through the Docker socket.
 test-integration: up-db sample import up-api
 	@docker compose run --rm tester
 

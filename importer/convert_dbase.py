@@ -9,9 +9,9 @@ from sqlalchemy import create_engine, Table, Column, MetaData, text, types as sa
 from sqlalchemy.engine import Engine
 
 try:
-    from .naming import sanitize_table_name, staging_location
+    from .naming import LIVE_SCHEMA, STAGING_SCHEMA, sanitize_table_name
 except ImportError:
-    from naming import sanitize_table_name, staging_location
+    from naming import LIVE_SCHEMA, STAGING_SCHEMA, sanitize_table_name
 
 
 log = logging.getLogger("importer")
@@ -190,34 +190,31 @@ def _warn_if_memo_missing(dbf: DBF, dbf_path: str) -> None:
 
 
 def load_dbf_into_postgres(engine: Engine, dbf_path: str) -> None:
+    if engine.dialect.name != "postgresql":
+        raise RuntimeError("imports require PostgreSQL")
+
     basename = os.path.splitext(os.path.basename(dbf_path))[0]
     table_name = sanitize_table_name(basename)
     dbf = DBF(dbf_path, encoding=get_dbf_encoding(), ignore_missing_memofile=True)
     _warn_if_memo_missing(dbf, dbf_path)
 
-    # Stage outside any sanitized basename, then swap. SQLite often does not
-    # roll back DDL, and `{table}__loading` can itself be a live table or
-    # longer than PostgreSQL's 63-byte identifier limit.
-    schema, staging_name = staging_location(engine.dialect.name, table_name)
-    table = infer_sqlalchemy_table_from_dbf(dbf, MetaData(), staging_name, schema=schema)
+    # Build under the same 63-byte name in import_staging, then move it into
+    # public. That name cannot truncate onto another table, and it cannot
+    # collide with a file that used to sanitize to "{table}__loading".
+    table = infer_sqlalchemy_table_from_dbf(dbf, MetaData(), table_name, schema=STAGING_SCHEMA)
     rows = _rows_for_import(dbf)
 
     preparer = engine.dialect.identifier_preparer
-    live_schema = "public" if engine.dialect.name == "postgresql" else None
-    live = _quoted(preparer, table_name, live_schema)
-    staging = _quoted(preparer, staging_name, schema)
+    live = _quoted(preparer, table_name, LIVE_SCHEMA)
+    staging = _quoted(preparer, table_name, STAGING_SCHEMA)
     with engine.begin() as conn:
-        if schema:
-            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {preparer.quote(schema)}"))
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {preparer.quote(STAGING_SCHEMA)}"))
         conn.execute(text(f"DROP TABLE IF EXISTS {staging}"))
         table.create(conn, checkfirst=False)
         if rows:
             conn.execute(table.insert(), rows)
         conn.execute(text(f"DROP TABLE IF EXISTS {live}"))
-        if schema:
-            conn.execute(text(f"ALTER TABLE {staging} SET SCHEMA {preparer.quote(live_schema)}"))
-        else:
-            conn.execute(text(f"ALTER TABLE {staging} RENAME TO {preparer.quote(table_name)}"))
+        conn.execute(text(f"ALTER TABLE {staging} SET SCHEMA {preparer.quote(LIVE_SCHEMA)}"))
 
 
 def main() -> int:

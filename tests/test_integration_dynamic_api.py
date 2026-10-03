@@ -93,5 +93,4 @@ def test_dynamic_api_endpoints_end_to_end():
         requests.get(f"{base_url}/db/tables/sample_people/rows/999999", timeout=5).status_code
         == 404
     )
-
-    _compose("down", env=env)
+    # Leave the stack up. `docker compose down` removes host `db` for later tests.
