@@ -55,7 +55,10 @@ def _people_db(engine) -> Iterator[tuple[str, Session]]:
 
 def test_parse_equality_filters_rejects_unknown_column():
     with pytest.raises(HTTPException) as exc:
-        parse_equality_filters({"name": "Alpha", "nope": "x"}, ["name", "dbf_recno"])
+        parse_equality_filters(
+            {"name": "Alpha", "nope": "x"},
+            {"name": String(), "dbf_recno": Integer()},
+        )
     assert exc.value.status_code == 400
 
 

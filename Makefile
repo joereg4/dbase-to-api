@@ -19,7 +19,7 @@ up-api: up-db
 test-unit: up-db
 	@docker compose run -e PYTHONPATH=$$(pwd) --rm tools pytest -q
 
-# Integration tests run on the host so they can call docker-compose inside tests
+# Integration tests run in the tester container, which calls compose through the Docker socket.
 test-integration: up-db sample import up-api
 	@docker compose run --rm tester
 

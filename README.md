@@ -147,14 +147,16 @@ docker compose run --rm importer
 
 ## Testing
 
-Run all tests (unit + integration) in Docker:
+Tests use PostgreSQL. `make test-unit` starts the database and fails if it is unreachable.
 
 ```bash
-make test
+make test-unit   # unit tests
+make test        # unit + integration, in Docker
 ```
 
 Notes:
 - Integration tests run in the `tester` container and call Docker from inside; ensure Docker Desktop file sharing is configured (see below).
+- `make test-integration` deletes `data/*.dbf` and one importer test runs `docker compose down` when it finishes.
 
 Mac users: enable Docker Desktop file sharing
 
