@@ -89,7 +89,7 @@ Table naming and schema inference
 - Dates → `DATE`, datetimes → `TIMESTAMP` (if present)
 - Each table gets a `dbf_recno` primary key: the 1-based physical record number (xBase `RECNO()`). Deleted records are omitted and their numbers are not reused. Row pages order by it
 - Column names are lowercased; collisions after lowercasing get numeric suffixes (`name`, `name_2`, …)
-- Full refresh loads `import_staging` on PostgreSQL (SQLite uses a quoted name that cannot match a sanitized basename) and swaps it into place. A failed reload leaves the previous table intact
+- Full refresh loads schema `import_staging`, then moves the table into `public`. A failed reload leaves the previous table intact
 - Missing memo files yield empty memo values and a warning when the `.dbf` has an `M`, `G`, `P`, or non-Visual-FoxPro `B` field and dbfread found no memo file
 - Default `.dbf` encoding is `latin-1` (override with `DBF_ENCODING` in `.env`)
 

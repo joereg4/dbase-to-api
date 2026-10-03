@@ -1,11 +1,12 @@
 """Unit tests for get-by-recno, filters, sort, and the rows envelope."""
 
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table, create_engine
+from sqlalchemy import Boolean, Column, Integer, MetaData, String, Table
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.requests import Request
 
@@ -25,14 +26,15 @@ def _request(query: str = "") -> Request:
 
 
 @contextmanager
-def _people_db() -> Iterator[Session]:
-    engine = create_engine("sqlite:///:memory:")
+def _people_db(engine) -> Iterator[tuple[str, Session]]:
+    table_name = engine.track_table(f"pytest_people_{uuid.uuid4().hex[:8]}")
     people = Table(
-        "people",
+        table_name,
         MetaData(),
         Column("name", String(20)),
         Column("active", Boolean),
         Column("dbf_recno", Integer, primary_key=True),
+        schema="public",
     )
     people.create(engine)
     with engine.begin() as conn:
@@ -46,7 +48,7 @@ def _people_db() -> Iterator[Session]:
         )
     db = sessionmaker(bind=engine)()
     try:
-        yield db
+        yield table_name, db
     finally:
         db.close()
 
@@ -57,24 +59,24 @@ def test_parse_equality_filters_rejects_unknown_column():
     assert exc.value.status_code == 400
 
 
-def test_get_row_by_dbf_recno():
-    with _people_db() as db:
-        row = get_row("people", 2, db=db)
+def test_get_row_by_dbf_recno(pg_engine):
+    with _people_db(pg_engine) as (table_name, db):
+        row = get_row(table_name, 2, db=db)
     assert row["name"] == "Beta"
     assert row["dbf_recno"] == 2
 
 
-def test_get_row_missing_returns_404():
-    with _people_db() as db:
+def test_get_row_missing_returns_404(pg_engine):
+    with _people_db(pg_engine) as (table_name, db):
         with pytest.raises(HTTPException) as exc:
-            get_row("people", 99, db=db)
+            get_row(table_name, 99, db=db)
     assert exc.value.status_code == 404
 
 
-def test_list_rows_envelope_and_filter():
-    with _people_db() as db:
+def test_list_rows_envelope_and_filter(pg_engine):
+    with _people_db(pg_engine) as (table_name, db):
         result = list_rows(
-            "people",
+            table_name,
             request=_request("name=Alpha"),
             db=db,
             limit=50,
@@ -87,10 +89,10 @@ def test_list_rows_envelope_and_filter():
     assert [r["name"] for r in result["items"]] == ["Alpha"]
 
 
-def test_list_rows_sort_descending():
-    with _people_db() as db:
+def test_list_rows_sort_descending(pg_engine):
+    with _people_db(pg_engine) as (table_name, db):
         result = list_rows(
-            "people",
+            table_name,
             request=_request(),
             db=db,
             limit=50,
@@ -101,11 +103,11 @@ def test_list_rows_sort_descending():
     assert [r["name"] for r in result["items"]] == ["Gamma", "Beta", "Alpha"]
 
 
-def test_list_rows_unknown_sort_returns_400():
-    with _people_db() as db:
+def test_list_rows_unknown_sort_returns_400(pg_engine):
+    with _people_db(pg_engine) as (table_name, db):
         with pytest.raises(HTTPException) as exc:
             list_rows(
-                "people",
+                table_name,
                 request=_request(),
                 db=db,
                 limit=50,

@@ -1,10 +1,11 @@
 """Verify that load_dbf_into_postgres drops+recreates the table so repeated
 runs leave the database in the same state (no row duplication)."""
 
+import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 try:
     from dbf import Table as DbfTable, READ_WRITE
@@ -24,15 +25,14 @@ def _write_sample_dbf(path: Path) -> None:
         table.close()
 
 
-def test_reimport_does_not_duplicate_rows(tmp_path):
-    dbf_path = tmp_path / "people.dbf"
+def test_reimport_does_not_duplicate_rows(pg_engine, tmp_path):
+    table = pg_engine.track_table(f"pytest_idem_{uuid.uuid4().hex[:8]}")
+    dbf_path = tmp_path / f"{table}.dbf"
     _write_sample_dbf(dbf_path)
 
-    engine = create_engine(f"sqlite:///{tmp_path/'db.sqlite'}")
+    load_dbf_into_postgres(pg_engine, str(dbf_path))
+    load_dbf_into_postgres(pg_engine, str(dbf_path))
 
-    load_dbf_into_postgres(engine, str(dbf_path))
-    load_dbf_into_postgres(engine, str(dbf_path))
-
-    with engine.begin() as conn:
-        count = conn.execute(text("SELECT COUNT(*) FROM people")).scalar()
+    with pg_engine.begin() as conn:
+        count = conn.execute(text(f'SELECT COUNT(*) FROM public."{table}"')).scalar()
     assert count == 2

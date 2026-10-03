@@ -1,4 +1,5 @@
 from importer.naming import sanitize_table_name
+from tests.conftest import postgres_url
 
 
 def test_sanitize_table_name_lowercases_and_strips():
@@ -36,7 +37,7 @@ def test_main_errors_on_sanitized_table_name_collision(tmp_path, monkeypatch, ca
     monkeypatch.setattr(
         convert_dbase,
         "get_database_url",
-        lambda: f"sqlite:///{tmp_path/'db.sqlite'}",
+        postgres_url,
     )
 
     loader_calls = []
